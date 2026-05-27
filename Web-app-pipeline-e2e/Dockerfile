@@ -4,7 +4,6 @@ WORKDIR /usr/src/app
 
 COPY app/package.json app/package-lock.json* ./
 RUN npm install --production
-
 COPY app/ .
 
 EXPOSE 3000
