@@ -2,10 +2,10 @@ FROM node:20-alpine
 
 WORKDIR /usr/src/app
 
-COPY package.json package-lock.json* ./
+COPY app/package.json app/package-lock.json* ./
 RUN npm install --production
 
-COPY . .
+COPY app/ .
 
 EXPOSE 3000
 
