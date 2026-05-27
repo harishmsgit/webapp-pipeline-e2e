@@ -1,0 +1,69 @@
+pipeline {
+  agent any
+
+  environment {
+    AWS_REGION = 'ap-south-1'
+    AWS_ACCOUNT_ID = '451620995756'
+    ECR_REPO_NAME = 'web-app-sprint1'
+    IMAGE_TAG = "${env.BUILD_ID}"
+    IMAGE_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
+  }
+
+  options {
+    skipDefaultCheckout()
+    timestamps()
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Validate AWS Access') {
+      steps {
+        script {
+          sh 'aws sts get-caller-identity'
+        }
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          sh 'docker build -t web-app-sprint1:${IMAGE_TAG} .'
+        }
+      }
+    }
+
+    stage('Login to ECR') {
+      steps {
+        script {
+          sh '''
+            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          '''
+        }
+      }
+    }
+
+    stage('Push Image to ECR') {
+      steps {
+        script {
+          sh '''
+            aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} || \
+              aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION}
+            docker tag web-app-sprint1:${IMAGE_TAG} ${IMAGE_URI}
+            docker push ${IMAGE_URI}
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      cleanWs()
+    }
+  }
+}
