@@ -31,8 +31,10 @@ pipeline {
 
     stage('Build Docker Image') {
       steps {
-        script {
-          sh 'docker build -t web-app-sprint1:${IMAGE_TAG} .'
+        dir('Web-app-pipeline-e2e') {
+          script {
+            sh 'docker build -t web-app-sprint1:${IMAGE_TAG} .'
+          }
         }
       }
     }
