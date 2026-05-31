@@ -1,39 +1,100 @@
+// Sprint 1 Jenkins Pipeline: Build Docker Image and Push to AWS ECR
+// 
+// This pipeline automates the Sprint 1 CI/CD workflow:
+// 1. Checkout source code from Git repository
+// 2. Validate AWS access and credentials
+// 3. Build Docker image from Dockerfile
+// 4. Authenticate to AWS ECR
+// 5. Create ECR repository if it doesn't exist
+// 6. Tag and push Docker image to ECR
+//
+// Prerequisites:
+// - Jenkins server with Docker and AWS CLI installed
+// - IAM role attached to EC2 instance with ECR permissions
+// - Git repository with source code and Dockerfile
+//
+// Configuration:
+// Update the environment variables below with your AWS account ID and preferred region.
+
 pipeline {
   agent any
 
   environment {
-    AWS_REGION = 'ap-south-1'
-    AWS_ACCOUNT_ID = '451620995756'
-    ECR_REPO_NAME = 'web-app-sprint1'
+    // AWS Configuration - UPDATE THESE VALUES FOR YOUR ENVIRONMENT
+    AWS_REGION = 'ap-south-1'                    // Change to your AWS region
+    AWS_ACCOUNT_ID = '234951664603'               // Change to your AWS account ID
+    ECR_REPO_NAME = 'web-app-sprint1'             // Change if using different ECR repo name
+    
+    // Derived values (do not modify)
     IMAGE_TAG = "${env.BUILD_ID}"
+    IMAGE_NAME = "web-app-sprint1"
     IMAGE_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
+    LATEST_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:latest"
   }
 
   options {
     skipDefaultCheckout()
     timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    disableConcurrentBuilds()
   }
 
   stages {
     stage('Checkout') {
       steps {
-        checkout scm
+        script {
+          echo "========== Stage: Checkout =========="
+          echo "Checking out source code from repository..."
+          checkout scm
+          echo "Source code checked out successfully"
+        }
       }
     }
 
     stage('Validate AWS Access') {
       steps {
         script {
-          sh 'aws sts get-caller-identity'
+          echo "========== Stage: Validate AWS Access =========="
+          echo "Validating AWS CLI and credentials..."
+          
+          // Verify AWS CLI is available
+          sh 'aws --version'
+          
+          // Verify AWS credentials and get account info
+          sh '''
+            echo "AWS Account Information:"
+            aws sts get-caller-identity --region ${AWS_REGION}
+            
+            echo ""
+            echo "AWS CLI configured region: ${AWS_REGION}"
+          '''
+          
+          echo "AWS access validation successful"
         }
       }
     }
 
     stage('Build Docker Image') {
       steps {
-        dir('Web-app-pipeline-e2e') {
-          script {
-            sh 'docker build -t web-app-sprint1:${IMAGE_TAG} .'
+        script {
+          echo "========== Stage: Build Docker Image =========="
+          echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
+          
+          dir('Web-app-pipeline-e2e') {
+            sh '''
+              echo "Building Docker image from Dockerfile..."
+              docker build \
+                --tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                --tag ${IMAGE_NAME}:latest \
+                --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+                --build-arg VCS_REF=$(git rev-parse --short HEAD) \
+                .
+              
+              echo ""
+              echo "Docker image built successfully"
+              echo "Listing built images:"
+              docker images | grep ${IMAGE_NAME}
+            '''
           }
         }
       }
@@ -42,8 +103,43 @@ pipeline {
     stage('Login to ECR') {
       steps {
         script {
+          echo "========== Stage: Login to ECR =========="
+          echo "Authenticating to AWS ECR..."
+          
           sh '''
-            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+            echo "Getting ECR login token..."
+            aws ecr get-login-password --region ${AWS_REGION} | \
+              docker login \
+                --username AWS \
+                --password-stdin \
+                ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+            
+            echo "Successfully authenticated to ECR"
+          '''
+        }
+      }
+    }
+
+    stage('Ensure ECR Repository') {
+      steps {
+        script {
+          echo "========== Stage: Ensure ECR Repository =========="
+          echo "Checking if ECR repository '${ECR_REPO_NAME}' exists..."
+          
+          sh '''
+            if aws ecr describe-repositories \
+              --repository-names ${ECR_REPO_NAME} \
+              --region ${AWS_REGION} > /dev/null 2>&1; then
+              echo "ECR repository already exists: ${ECR_REPO_NAME}"
+            else
+              echo "ECR repository not found. Creating repository: ${ECR_REPO_NAME}"
+              aws ecr create-repository \
+                --repository-name ${ECR_REPO_NAME} \
+                --region ${AWS_REGION} \
+                --image-tag-mutability ENABLE \
+                --image-scanning-configuration scanOnPush=true
+              echo "ECR repository created successfully"
+            fi
           '''
         }
       }
@@ -52,11 +148,46 @@ pipeline {
     stage('Push Image to ECR') {
       steps {
         script {
+          echo "========== Stage: Push Image to ECR =========="
+          echo "Pushing Docker image to ECR..."
+          
           sh '''
-            aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} || \
-              aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION}
-            docker tag web-app-sprint1:${IMAGE_TAG} ${IMAGE_URI}
+            echo "Tagging image for ECR..."
+            docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_URI}
+            docker tag ${IMAGE_NAME}:latest ${LATEST_URI}
+            
+            echo ""
+            echo "Pushing image to ECR (tag: ${IMAGE_TAG})..."
             docker push ${IMAGE_URI}
+            
+            echo ""
+            echo "Pushing latest tag to ECR..."
+            docker push ${LATEST_URI}
+            
+            echo ""
+            echo "Image pushed successfully to ECR"
+            echo "Image URI: ${IMAGE_URI}"
+          '''
+        }
+      }
+    }
+
+    stage('Verify ECR Image') {
+      steps {
+        script {
+          echo "========== Stage: Verify ECR Image =========="
+          echo "Verifying image is present in ECR..."
+          
+          sh '''
+            echo "Listing images in ECR repository '${ECR_REPO_NAME}':"
+            aws ecr describe-images \
+              --repository-name ${ECR_REPO_NAME} \
+              --region ${AWS_REGION} \
+              --query 'imageDetails[*].[imageTags[0], imageSizeInBytes, imagePushedAt]' \
+              --output table
+            
+            echo ""
+            echo "Image verification complete"
           '''
         }
       }
@@ -64,8 +195,28 @@ pipeline {
   }
 
   post {
+    success {
+      script {
+        echo "========== Pipeline Success =========="
+        echo "Build and push to ECR completed successfully"
+        echo "Image: ${IMAGE_URI}"
+        echo "Latest tag: ${LATEST_URI}"
+      }
+    }
+    
+    failure {
+      script {
+        echo "========== Pipeline Failed =========="
+        echo "Build or push to ECR failed. Check logs above for details."
+      }
+    }
+    
     always {
-      cleanWs()
+      script {
+        echo "========== Post-Build Cleanup =========="
+        echo "Cleaning workspace..."
+        cleanWs()
+      }
     }
   }
 }
