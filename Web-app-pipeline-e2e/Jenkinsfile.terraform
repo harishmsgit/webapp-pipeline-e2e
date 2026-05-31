@@ -6,6 +6,7 @@ pipeline {
     string(name: 'TF_STATE_BUCKET', defaultValue: 'my-terraform-state-bucket', description: 'S3 bucket for Terraform state files')
     string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform state locking')
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
+    booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'If true, do not attempt to create S3/DynamoDB backend resources')
   }
 
   environment {
@@ -37,6 +38,9 @@ pipeline {
     }
 
     stage('Prepare Backend') {
+      when {
+        expression { return !params.SKIP_BACKEND_CREATION }
+      }
       steps {
         dir('terraform') {
           sh """
