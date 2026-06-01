@@ -43,6 +43,8 @@
         "eks:DescribeCluster",
         "eks:CreateNodegroup",
         "eks:DescribeNodegroup",
+        "ec2:DescribeImages",
+        "ec2:DescribeAvailabilityZones",
         "ec2:CreateSecurityGroup",
         "ec2:AuthorizeSecurityGroupIngress",
         "ec2:CreateTags",
