@@ -109,7 +109,12 @@
         "eks:DescribeNodegroup",
         "eks:ListNodegroups",
         "eks:DeleteCluster",
-        "eks:DeleteNodegroup"
+        "eks:DeleteNodegroup",
+        "eks:TagResource",
+        "eks:UntagResource",
+        "eks:ListTagsForResource",
+        "eks:UpdateClusterVersion",
+        "eks:UpdateNodegroupVersion"
       ],
       "Resource": "*"
     },
