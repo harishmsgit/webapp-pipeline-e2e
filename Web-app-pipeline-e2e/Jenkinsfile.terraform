@@ -71,10 +71,12 @@ pipeline {
       steps {
         dir('Web-app-pipeline-e2e/terraform') {
           sh """
+            echo "Initializing Terraform backend with state bucket ${params.TF_STATE_BUCKET} and lock table ${params.LOCK_TABLE}"
             terraform init \
               -backend-config="bucket=${params.TF_STATE_BUCKET}" \
               -backend-config="key=terraform/terraform.tfstate" \
               -backend-config="region=${AWS_REGION}" \
+              -backend-config="use_lockfile=true" \
               -backend-config="dynamodb_table=${params.LOCK_TABLE}"
           """
         }
@@ -101,6 +103,7 @@ pipeline {
     stage('Terraform Apply') {
       steps {
         dir('Web-app-pipeline-e2e/terraform') {
+          sh 'echo "Terraform apply will wait for AWS resources to finish creating, including EKS cluster creation."'
           sh 'terraform apply -auto-approve tfplan'
         }
       }

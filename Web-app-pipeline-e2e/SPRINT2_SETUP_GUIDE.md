@@ -80,6 +80,7 @@ terraform init \
   -backend-config="bucket=my-terraform-state-bucket" \
   -backend-config="key=terraform/terraform.tfstate" \
   -backend-config="region=ap-south-1" \
+  -backend-config="use_lockfile=true" \
   -backend-config="dynamodb_table=my-terraform-lock-table"
 
 terraform plan -out=tfplan
