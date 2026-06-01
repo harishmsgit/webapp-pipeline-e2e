@@ -43,12 +43,14 @@ Example values:
 
 The Jenkins agent credentials or attached instance role must allow:
 
-- `s3:CreateBucket`, `s3:HeadBucket`, `s3:PutObject`, `s3:GetObject`, `s3:ListBucket`
-- `dynamodb:CreateTable`, `dynamodb:DescribeTable`, `dynamodb:PutItem`, `dynamodb:GetItem`
+- `s3:CreateBucket`, `s3:HeadBucket`, `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket`
+- `dynamodb:CreateTable`, `dynamodb:DescribeTable`, `dynamodb:PutItem`, `dynamodb:GetItem`, `dynamodb:DeleteItem`, `dynamodb:UpdateItem`
 - `iam:CreateRole`, `iam:AttachRolePolicy`, `iam:PassRole`
-- `eks:CreateCluster`, `eks:DescribeCluster`, `eks:CreateNodegroup`
-- `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`, `ec2:RunInstances`
-- `vpc:CreateVpc`, `vpc:DescribeVpcs`, `vpc:CreateSubnet`, `vpc:CreateInternetGateway`
+- `eks:CreateCluster`, `eks:DescribeCluster`, `eks:CreateNodegroup`, `eks:DescribeNodegroup`
+- `ec2:CreateSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`, `ec2:CreateTags`, `ec2:RunInstances`, `ec2:DescribeInstances`
+- `vpc:CreateVpc`, `vpc:DescribeVpcs`, `vpc:CreateSubnet`, `vpc:CreateInternetGateway`, `ec2:CreateRoute`, `ec2:AssociateRouteTable`
+
+For convenience, attach the policy defined in `jenkins-terraform-policy.json` to the Jenkins EC2 role.
 
 ## Example Job DSL Snippet
 

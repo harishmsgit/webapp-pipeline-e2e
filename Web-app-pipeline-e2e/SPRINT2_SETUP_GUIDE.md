@@ -21,6 +21,7 @@ Automate AWS infrastructure provisioning using Terraform, with state stored in S
   - EKS, EC2, VPC, S3, DynamoDB
   - STS access to verify identity
 - AWS CLI configured or IAM instance profile attached
+- Jenkins EC2 instance role should include the policy defined in `jenkins-terraform-policy.json` to allow S3 backend creation and DynamoDB locking
 
 ## Setup Steps
 
