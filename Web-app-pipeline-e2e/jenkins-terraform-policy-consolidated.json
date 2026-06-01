@@ -93,11 +93,18 @@
         "iam:DeleteRolePolicy",
         "iam:GetRole",
         "iam:ListRoles",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
         "iam:GetRolePolicy",
         "iam:DeleteRole",
         "iam:CreatePolicy",
         "iam:GetPolicy",
-        "iam:ListPolicies"
+        "iam:ListPolicies",
+        "iam:CreateInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile"
       ],
       "Resource": "*"
     },
