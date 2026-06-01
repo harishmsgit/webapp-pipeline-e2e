@@ -72,7 +72,7 @@ pipeline {
         dir('Web-app-pipeline-e2e/terraform') {
           sh """
             echo "Initializing Terraform backend with state bucket ${params.TF_STATE_BUCKET} and lock table ${params.LOCK_TABLE}"
-            terraform init \
+            terraform init -reconfigure \
               -backend-config="bucket=${params.TF_STATE_BUCKET}" \
               -backend-config="key=terraform/terraform.tfstate" \
               -backend-config="region=${AWS_REGION}" \
