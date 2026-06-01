@@ -140,6 +140,7 @@
         "iam:CreatePolicy",
         "iam:GetPolicy",
         "iam:ListPolicies",
+        "iam:CreateServiceLinkedRole",
         "iam:CreateInstanceProfile",
         "iam:AddRoleToInstanceProfile",
         "iam:GetInstanceProfile",
