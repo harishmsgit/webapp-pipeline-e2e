@@ -48,6 +48,8 @@
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeInstanceTypes",
         "ec2:DescribeInstances",
+        "ec2:DescribeInstanceAttribute",
+        "ec2:ModifyInstanceAttribute",
         "ec2:DescribeSubnets",
         "ec2:DescribeVpcs",
         "ec2:DescribeVpcAttribute",
