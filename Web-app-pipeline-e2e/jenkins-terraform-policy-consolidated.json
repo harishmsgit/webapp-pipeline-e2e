@@ -44,6 +44,7 @@
         "ec2:CreateTags",
         "ec2:DescribeImages",
         "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeInstanceTypes",
         "ec2:DescribeInstances",
         "ec2:DescribeSubnets",
         "ec2:DescribeVpcs",
@@ -105,6 +106,7 @@
         "iam:ListRoles",
         "iam:ListRolePolicies",
         "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
         "iam:GetRolePolicy",
         "iam:DeleteRole",
         "iam:CreatePolicy",
@@ -114,7 +116,8 @@
         "iam:AddRoleToInstanceProfile",
         "iam:GetInstanceProfile",
         "iam:DeleteInstanceProfile",
-        "iam:RemoveRoleFromInstanceProfile"
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:ListInstanceProfiles"
       ],
       "Resource": "*"
     },
