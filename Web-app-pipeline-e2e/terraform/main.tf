@@ -2,6 +2,8 @@ locals {
   name_prefix = "${var.environment}-webapp"
 }
 
+
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -196,8 +198,8 @@ resource "aws_eks_cluster" "main" {
   role_arn = aws_iam_role.eks_cluster.arn
 
   vpc_config {
-    subnet_ids         = aws_subnet.public[*].id
-    security_group_ids = [aws_security_group.eks_cluster.id]
+    subnet_ids              = aws_subnet.public[*].id
+    security_group_ids      = [aws_security_group.eks_cluster.id]
     endpoint_private_access = false
     endpoint_public_access  = true
   }
@@ -256,10 +258,10 @@ data "aws_ami" "amazon_linux_2" {
 }
 
 resource "aws_instance" "management" {
-  ami                    = data.aws_ami.amazon_linux_2.id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public[0].id
-  vpc_security_group_ids = [aws_security_group.ec2.id]
+  ami                         = data.aws_ami.amazon_linux_2.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public[0].id
+  vpc_security_group_ids      = [aws_security_group.ec2.id]
   associate_public_ip_address = true
 
   tags = {
