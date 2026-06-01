@@ -25,7 +25,7 @@ variable "public_subnet_cidrs" {
 variable "instance_type" {
   description = "EC2 instance type for management resources"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
 }
 
 variable "allowed_ssh_cidr" {
