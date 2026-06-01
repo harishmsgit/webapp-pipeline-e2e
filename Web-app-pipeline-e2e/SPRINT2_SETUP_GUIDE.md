@@ -99,6 +99,7 @@ terraform apply -auto-approve tfplan
 ```
 
 ## Notes
+- The Terraform config is currently set to provision a single EKS worker node (`desired_size = 1`, `max_size = 1`, `min_size = 1`) to stay within typical AWS vCPU quotas for small accounts.
 - Update `terraform/backend.tf` placeholders if you prefer static backend configuration.
 - The Jenkins job also attempts to create backend resources if they do not exist.
 - Keep AWS credentials secure; use instance profiles or Jenkins credentials store.
