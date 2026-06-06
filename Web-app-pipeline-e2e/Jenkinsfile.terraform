@@ -9,7 +9,7 @@ pipeline {
     string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL (e.g., 123456789.dkr.ecr.ap-south-1.amazonaws.com)')
     string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name for app image')
     string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional: CodeBuild project name for Docker build (if empty, uses local Docker)')
-    string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Optional Jenkins AWS credentials ID to bind AWS CLI environment variables')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Required Jenkins AWS credentials ID to bind AWS CLI environment variables for isolated EC2/Jenkins access')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'If true, do not attempt to create S3/DynamoDB backend resources')
     booleanParam(name: 'BUILD_AND_PUSH_IMAGE', defaultValue: false, description: 'If true, build and push Docker image to ECR via CodeBuild')
   }
