@@ -8,11 +8,8 @@ pipeline {
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
     string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL')
     string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name')
-    string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional CodeBuild project for Docker build')
-    choice(name: 'DOCKER_BUILD_METHOD', choices: 'AUTO\nLOCAL\nCODEBUILD', description: 'Docker build method')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'Skip S3/DynamoDB backend creation')
-    booleanParam(name: 'BUILD_AND_PUSH_IMAGE', defaultValue: false, description: 'Build and push Docker image to ECR')
   }
 
   environment {
@@ -43,7 +40,7 @@ pipeline {
 
     stage('Build and Push Docker Image') {
       when {
-        expression { return params.BUILD_AND_PUSH_IMAGE && params.ECR_REGISTRY }
+        expression { return params.ECR_REGISTRY?.trim() }
       }
       steps {
         script {
@@ -53,33 +50,15 @@ pipeline {
           }
 
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            def buildMethod = params.DOCKER_BUILD_METHOD ?: 'AUTO'
-            if (buildMethod == 'AUTO' && params.CODEBUILD_PROJECT?.trim()) {
-              buildMethod = 'CODEBUILD'
-            }
-
-            if (buildMethod == 'CODEBUILD') {
-              if (!params.CODEBUILD_PROJECT?.trim()) {
-                error('CODEBUILD_PROJECT is required when DOCKER_BUILD_METHOD=CODEBUILD.')
-              }
-              sh """
-                aws codebuild start-build --project-name ${params.CODEBUILD_PROJECT} --environment-variables-override \
-                  name=AWS_REGION,value=${params.AWS_REGION} \
-                  name=IMAGE_TAG,value=${env.IMAGE_TAG} \
-                  name=ECR_REGISTRY,value=${params.ECR_REGISTRY} \
-                  name=ECR_REPOSITORY,value=${params.ECR_REPOSITORY}
-              """
-            } else {
-              sh """
-                if ! command -v docker >/dev/null 2>&1; then
-                  echo 'ERROR: Docker is not installed on the agent. Install Docker or set DOCKER_BUILD_METHOD=CODEBUILD.' >&2
-                  exit 1
-                fi
-                aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
-                docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG} .
-                docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG}
-              """
-            }
+            sh """
+              if ! command -v docker >/dev/null 2>&1; then
+                echo 'ERROR: Docker is not installed on the agent. Install Docker on the agent before running this stage.' >&2
+                exit 1
+              fi
+              aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
+              docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG} .
+              docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG}
+            """
           }
         }
       }
