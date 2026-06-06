@@ -38,8 +38,27 @@ pipeline {
         script {
           env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
           env.IMAGE_TAG = "${BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+          def helper = sh(script: '''
+            if [ -x "ci/parse_branch_env" ]; then
+              echo "ci/parse_branch_env"
+            elif [ -f "ci/parse_branch_env.py" ]; then
+              echo "ci/parse_branch_env.py"
+            elif [ -x "Web-app-pipeline-e2e/ci/parse_branch_env" ]; then
+              echo "Web-app-pipeline-e2e/ci/parse_branch_env"
+            elif [ -f "Web-app-pipeline-e2e/ci/parse_branch_env.py" ]; then
+              echo "Web-app-pipeline-e2e/ci/parse_branch_env.py"
+            else
+              echo ""
+            fi
+          ''', returnStdout: true).trim()
+          env.BRANCH_HELPER_PATH = helper
+          if (helper) {
+            sh "chmod +x '${helper}' || true"
+            echo "Branch helper found at ${helper}"
+          } else {
+            echo 'Branch helper not found; using fallback branch-to-env heuristics.'
+          }
         }
-        sh 'chmod +x ci/parse_branch_env || true'
       }
     }
 
@@ -140,7 +159,14 @@ pipeline {
               sh 'aws sts get-caller-identity --region ${AWS_REGION}'
             }
           } else {
-            sh 'aws sts get-caller-identity --region ${AWS_REGION}'
+            sh '''
+              if aws sts get-caller-identity --region ${AWS_REGION}; then
+                exit 0
+              else
+                echo 'ERROR: AWS credentials were not found. Set AWS_CREDENTIALS_ID or configure AWS credentials on the Jenkins agent.' >&2
+                exit 1
+              fi
+            '''
           }
         }
       }
@@ -231,15 +257,21 @@ pipeline {
 
             // Portable: prefer executable wrapper, then Python helper, otherwise fall back to heuristics
             def selected = null
-            def wrapperOk = sh(script: "if [ -x ../ci/parse_branch_env ]; then echo ok; else echo missing; fi", returnStdout: true).trim()
+            def helperPath = env.BRANCH_HELPER_PATH?.trim()
+            def wrapperOk = 'missing'
+            if (helperPath) {
+              wrapperOk = sh(script: "if [ -x '../${helperPath}' ]; then echo ok; else echo missing; fi", returnStdout: true).trim()
+            }
             if (wrapperOk == 'ok') {
-              selected = sh(script: "../ci/parse_branch_env --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
+              selected = sh(script: "../${helperPath} --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
             } else {
               def pythonCmd = sh(script: "command -v python3 >/dev/null 2>&1 && echo python3 || (command -v python >/dev/null 2>&1 && echo python) || echo missing", returnStdout: true).trim()
-              if (pythonCmd != 'missing') {
+              if (pythonCmd != 'missing' && helperPath?.endsWith('.py')) {
+                selected = sh(script: "${pythonCmd} ../${helperPath} --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
+              } else if (pythonCmd != 'missing' && !helperPath) {
                 selected = sh(script: "${pythonCmd} ../ci/parse_branch_env.py --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
               } else {
-                echo "No wrapper or python available on agent; falling back to built-in heuristics"
+                echo "No wrapper or python helper available on agent; falling back to built-in heuristics"
               }
             }
 
