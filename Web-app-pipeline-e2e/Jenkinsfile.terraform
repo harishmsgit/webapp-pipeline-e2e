@@ -3,18 +3,24 @@ pipeline {
 
   parameters {
     string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region where Terraform will provision resources')
-    string(name: 'TF_STATE_BUCKET', defaultValue: 'my-terraform-state-bucket', description: 'S3 bucket for Terraform state files')
+    string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state files')
     string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform state locking')
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
+    string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL (e.g., 123456789.dkr.ecr.ap-south-1.amazonaws.com)')
+    string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name for app image')
+    string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional: CodeBuild project name for Docker build (if empty, uses local Docker)')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'If true, do not attempt to create S3/DynamoDB backend resources')
+    booleanParam(name: 'BUILD_AND_PUSH_IMAGE', defaultValue: false, description: 'If true, build and push Docker image to ECR via CodeBuild')
   }
 
   environment {
     AWS_REGION     = "${params.AWS_REGION}"
     TF_VAR_aws_region = "${params.AWS_REGION}"
-    TF_VAR_environment = "${params.ENVIRONMENT}"
+      # Environment will be managed via Terraform workspaces; do not export TF_VAR_environment here
     TF_VAR_state_bucket = "${params.TF_STATE_BUCKET}"
     TF_VAR_lock_table   = "${params.LOCK_TABLE}"
+    GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+    IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
   }
 
   options {
@@ -28,8 +34,59 @@ pipeline {
     stage('Checkout') {
       steps {
         checkout scm
+        sh 'chmod +x ci/parse_branch_env || true'
       }
     }
+
+    stage('Build and Push Docker Image') {
+      when {
+        expression { return params.BUILD_AND_PUSH_IMAGE && params.ECR_REGISTRY }
+      }
+      steps {
+        script {
+          echo "Building Docker image via AWS CodeBuild..."
+          
+          // Option 1: Use CodeBuild project if specified
+          if (params.CODEBUILD_PROJECT) {
+            sh """
+              aws codebuild batch-get-builds --ids \$(aws codebuild start-build \
+                --project-name ${params.CODEBUILD_PROJECT} \
+                --source-version ${env.GIT_COMMIT} \
+                --environment-variables-override \
+                  name=AWS_ACCOUNT_ID,value=\$(aws sts get-caller-identity --query Account --output text) \
+                  name=AWS_REGION,value=${AWS_REGION} \
+                  name=IMAGE_REPO_NAME,value=${params.ECR_REPOSITORY} \
+                  name=IMAGE_TAG,value=${IMAGE_TAG} \
+                  name=ECR_REGISTRY,value=${params.ECR_REGISTRY} \
+                --query 'build.id' --output text) \
+                --region ${AWS_REGION}
+              
+              echo "CodeBuild job started. Monitor in AWS Console: https://console.aws.amazon.com/codesuite/codebuild"
+            """
+          } else {
+            // Option 2: Use local Docker if CodeBuild project not specified
+            sh """
+              echo "CodeBuild project not specified. Using local Docker..."
+              
+              # Login to ECR
+              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
+              
+              # Build image
+              docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} .
+              docker tag ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
+              
+              # Push to ECR
+              docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}
+              docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
+              
+              echo "Docker image pushed to ECR: ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}"
+            """
+          }
+        }
+      }
+    }
+
+    // plugin validation removed; pipeline now uses `yq` on the agent to parse YAML mappings
 
     stage('Validate AWS Access') {
       steps {
@@ -79,6 +136,52 @@ pipeline {
               -backend-config="use_lockfile=true" \
               -backend-config="dynamodb_table=${params.LOCK_TABLE}"
           """
+        }
+      }
+    }
+
+    stage('Select Workspace') {
+      steps {
+        dir('Web-app-pipeline-e2e/terraform') {
+          script {
+            // prefer explicit ENVIRONMENT parameter; otherwise derive from branch using mapping file
+            def envParam = params.ENVIRONMENT?.trim()
+            def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'dev'
+            def raw = envParam ?: branchName
+            raw = raw.replaceAll('/','-')
+
+            // Portable: prefer executable wrapper, then Python helper, otherwise fall back to heuristics
+            def selected = null
+            def wrapperOk = sh(script: "if [ -x ../ci/parse_branch_env ]; then echo ok; else echo missing; fi", returnStdout: true).trim()
+            if (wrapperOk == 'ok') {
+              selected = sh(script: "../ci/parse_branch_env --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
+            } else {
+              def pythonCmd = sh(script: "command -v python3 >/dev/null 2>&1 && echo python3 || (command -v python >/dev/null 2>&1 && echo python) || echo missing", returnStdout: true).trim()
+              if (pythonCmd != 'missing') {
+                selected = sh(script: "${pythonCmd} ../ci/parse_branch_env.py --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
+              } else {
+                echo "No wrapper or python available on agent; falling back to built-in heuristics"
+              }
+            }
+
+            if (!selected) {
+              def key = raw.toLowerCase()
+              if (key == 'main' || key == 'master' || key.startsWith('release') || key == 'prod') {
+                selected = 'prod'
+              } else if (key == 'develop' || key == 'dev' || key == 'development') {
+                selected = 'dev'
+              } else if (key == 'qa' || key == 'staging' || key == 'stage') {
+                selected = 'qa'
+              } else {
+                selected = raw.replaceAll('[^A-Za-z0-9_-]','-')
+              }
+            }
+
+            sh """
+              echo "Using Terraform workspace: ${selected} (derived from '${raw}')"
+              terraform workspace select ${selected} || terraform workspace new ${selected}
+            """
+          }
         }
       }
     }

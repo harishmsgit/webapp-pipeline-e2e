@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Deployment environment identifier"
   type        = string
-  default     = "dev"
+  default     = null
 }
 
 variable "vpc_cidr" {
@@ -43,11 +43,11 @@ variable "cluster_name" {
 variable "state_bucket" {
   description = "S3 bucket name used to store Terraform state"
   type        = string
-  default     = "REPLACE_WITH_TFSTATE_BUCKET"
+  default     = "harish-terraform-state-bucket"
 }
 
 variable "lock_table" {
   description = "DynamoDB table name used for Terraform state locking"
   type        = string
-  default     = "REPLACE_WITH_LOCK_TABLE"
+  default     = "harish-terraform-lock-table"
 }

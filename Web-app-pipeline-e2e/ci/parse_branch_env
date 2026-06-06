@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Wrapper that executes the Python helper if available. Makes it easy to run as an executable on agents.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY=$(command -v python3 || command -v python || true)
+if [ -z "${PY}" ]; then
+  # No python available; print nothing so caller falls back
+  exit 0
+fi
+exec "${PY}" "${SCRIPT_DIR}/parse_branch_env.py" "$@"
