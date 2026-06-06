@@ -353,11 +353,21 @@ resource "helm_release" "alb_ingress_controller" {
   repository       = "https://aws.github.io/eks-charts"
   chart            = "aws-load-balancer-controller"
   namespace        = "kube-system"
-  version          = "2.6.2"
+  version          = "3.4.0"
 
   set {
     name  = "clusterName"
     value = aws_eks_cluster.main.name
+  }
+
+  set {
+    name  = "region"
+    value = var.aws_region
+  }
+
+  set {
+    name  = "vpcId"
+    value = aws_vpc.main.id
   }
 
   set {
@@ -509,22 +519,22 @@ resource "kubernetes_horizontal_pod_autoscaler" "demo_nginx" {
   depends_on = [kubernetes_deployment.demo_nginx]
 }
 
-resource "kubernetes_ingress" "demo_nginx" {
+resource "kubernetes_ingress_v1" "demo_nginx" {
   depends_on = [helm_release.alb_ingress_controller]
 
   metadata {
     name      = "demo-nginx-ingress"
     namespace = kubernetes_namespace.demo.metadata[0].name
     annotations = {
-      "kubernetes.io/ingress.class"                         = "alb"
-      "alb.ingress.kubernetes.io/scheme"                    = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type"               = "ip"
-      "alb.ingress.kubernetes.io/load-balancer-name"        = "${local.name_prefix}-alb"
-      "alb.ingress.kubernetes.io/healthcheck-path"          = "/"
-      "alb.ingress.kubernetes.io/healthcheck-interval-seconds" = "15"
-      "alb.ingress.kubernetes.io/healthcheck-timeout-seconds"  = "5"
-      "alb.ingress.kubernetes.io/healthy-threshold-count"   = "2"
-      "alb.ingress.kubernetes.io/unhealthy-threshold-count" = "2"
+      "kubernetes.io/ingress.class"                             = "alb"
+      "alb.ingress.kubernetes.io/scheme"                        = "internet-facing"
+      "alb.ingress.kubernetes.io/target-type"                   = "ip"
+      "alb.ingress.kubernetes.io/load-balancer-name"            = "${local.name_prefix}-alb"
+      "alb.ingress.kubernetes.io/healthcheck-path"              = "/"
+      "alb.ingress.kubernetes.io/healthcheck-interval-seconds"  = "15"
+      "alb.ingress.kubernetes.io/healthcheck-timeout-seconds"   = "5"
+      "alb.ingress.kubernetes.io/healthy-threshold-count"       = "2"
+      "alb.ingress.kubernetes.io/unhealthy-threshold-count"     = "2"
     }
   }
 
@@ -534,11 +544,17 @@ resource "kubernetes_ingress" "demo_nginx" {
     rule {
       http {
         path {
-          path = "/"
+          path     = "/"
+          path_type = "Prefix"
 
           backend {
-            service_name = kubernetes_service.demo_nginx.metadata[0].name
-            service_port = 80
+            service {
+              name = kubernetes_service.demo_nginx.metadata[0].name
+
+              port {
+                number = 80
+              }
+            }
           }
         }
       }
