@@ -129,7 +129,7 @@ pipeline {
               dir(env.TERRAFORM_DIR) {
                 sh """
                   echo 'Using Terraform workspace: ${workspace}'
-                  terraform workspace select ${workspace} || terraform workspace new ${workspace}
+                  terraform workspace select -or-create ${workspace}
                 """
               }
           }
@@ -146,7 +146,7 @@ pipeline {
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir(env.TERRAFORM_DIR) {
-              sh 'pwd && ls -la && terraform fmt -check && terraform validate'
+              sh 'terraform validate'
             }
           }
         }
@@ -162,7 +162,7 @@ pipeline {
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir(env.TERRAFORM_DIR) {
-              sh 'pwd && ls -la && terraform plan -out=tfplan'
+              sh 'terraform plan -out=tfplan'
             }
           }
         }
