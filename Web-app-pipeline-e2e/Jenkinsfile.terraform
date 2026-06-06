@@ -31,7 +31,9 @@ pipeline {
         checkout scm
         script {
           env.IMAGE_TAG = "${BUILD_NUMBER}-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
-          def resolvedBranch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+          def branchCandidate = env.BRANCH_NAME ?: env.GIT_BRANCH
+          def fallbackBranch = sh(script: 'git rev-parse --abbrev-ref HEAD 2>/dev/null || echo DETACHED', returnStdout: true).trim()
+          def resolvedBranch = branchCandidate ?: fallbackBranch
           echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}, resolvedBranch=${resolvedBranch}"
         }
       }
@@ -41,10 +43,12 @@ pipeline {
       steps {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
-          if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
-          }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+          if (awsCreds) {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+              sh 'aws sts get-caller-identity --region ${AWS_REGION}'
+            }
+          } else {
+            echo 'AWS_CREDENTIALS_ID not provided; using agent environment credentials or instance profile.'
             sh 'aws sts get-caller-identity --region ${AWS_REGION}'
           }
         }
