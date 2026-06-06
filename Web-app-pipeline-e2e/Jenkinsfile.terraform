@@ -2,27 +2,25 @@ pipeline {
   agent any
 
   parameters {
-    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region where Terraform will provision resources')
-    string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state files')
-    string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform state locking')
+    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region for provisioning')
+    string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state')
+    string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform locking')
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
-    string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL (e.g., 123456789.dkr.ecr.ap-south-1.amazonaws.com)')
-    string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name for app image')
-    string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional: CodeBuild project name for Docker build if using CODEBUILD build method')
-    choice(name: 'DOCKER_BUILD_METHOD', choices: 'AUTO\nLOCAL\nCODEBUILD', description: 'Preferred Docker build method: AUTO uses CODEBUILD_PROJECT if set, otherwise local')
-    string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Required Jenkins AWS credentials ID to bind AWS CLI environment variables for isolated EC2/Jenkins access')
-    booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'If true, do not attempt to create S3/DynamoDB backend resources')
-    booleanParam(name: 'BUILD_AND_PUSH_IMAGE', defaultValue: false, description: 'If true, build and push Docker image to ECR via CodeBuild')
+    string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL')
+    string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name')
+    string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional CodeBuild project for Docker build')
+    choice(name: 'DOCKER_BUILD_METHOD', choices: 'AUTO\nLOCAL\nCODEBUILD', description: 'Docker build method')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
+    booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'Skip S3/DynamoDB backend creation')
+    booleanParam(name: 'BUILD_AND_PUSH_IMAGE', defaultValue: false, description: 'Build and push Docker image to ECR')
   }
 
   environment {
-    AWS_REGION         = "${params.AWS_REGION}"
-    TF_VAR_aws_region  = "${params.AWS_REGION}"
-    // Environment will be managed via Terraform workspaces; do not export TF_VAR_environment here
+    AWS_REGION = "${params.AWS_REGION}"
+    TF_VAR_aws_region = "${params.AWS_REGION}"
     TF_VAR_state_bucket = "${params.TF_STATE_BUCKET}"
-    TF_VAR_lock_table   = "${params.LOCK_TABLE}"
-    GIT_COMMIT_SHORT   = ""
-    IMAGE_TAG          = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+    TF_VAR_lock_table = "${params.LOCK_TABLE}"
+    IMAGE_TAG = ''
   }
 
   options {
@@ -37,8 +35,7 @@ pipeline {
       steps {
         checkout scm
         script {
-          env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-          env.IMAGE_TAG = "${BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+          env.IMAGE_TAG = "${BUILD_NUMBER}-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
           echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}"
         }
       }
@@ -52,7 +49,7 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
 
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
@@ -63,37 +60,24 @@ pipeline {
 
             if (buildMethod == 'CODEBUILD') {
               if (!params.CODEBUILD_PROJECT?.trim()) {
-                error('CODEBUILD_PROJECT must be specified when DOCKER_BUILD_METHOD=CODEBUILD.')
+                error('CODEBUILD_PROJECT is required when DOCKER_BUILD_METHOD=CODEBUILD.')
               }
-              echo "Starting AWS CodeBuild project ${params.CODEBUILD_PROJECT} to build and push Docker image..."
               sh """
-                aws codebuild batch-get-builds --ids \$(aws codebuild start-build \
-                  --project-name ${params.CODEBUILD_PROJECT} \
-                  --source-version ${env.GIT_COMMIT} \
-                  --environment-variables-override \
-                    name=AWS_ACCOUNT_ID,value=\$(aws sts get-caller-identity --query Account --output text) \
-                    name=AWS_REGION,value=${AWS_REGION} \
-                    name=IMAGE_REPO_NAME,value=${params.ECR_REPOSITORY} \
-                    name=IMAGE_TAG,value=${IMAGE_TAG} \
-                    name=ECR_REGISTRY,value=${params.ECR_REGISTRY} \
-                  --query 'build.id' --output text) \
-                  --region ${AWS_REGION}
-                echo "CodeBuild job started. Monitor in AWS Console: https://console.aws.amazon.com/codesuite/codebuild"
+                aws codebuild start-build --project-name ${params.CODEBUILD_PROJECT} --environment-variables-override \
+                  name=AWS_REGION,value=${params.AWS_REGION} \
+                  name=IMAGE_TAG,value=${env.IMAGE_TAG} \
+                  name=ECR_REGISTRY,value=${params.ECR_REGISTRY} \
+                  name=ECR_REPOSITORY,value=${params.ECR_REPOSITORY}
               """
             } else {
-              echo "Building Docker image locally on EC2 and pushing to ECR..."
               sh """
                 if ! command -v docker >/dev/null 2>&1; then
                   echo 'ERROR: Docker is not installed on the agent. Install Docker or set DOCKER_BUILD_METHOD=CODEBUILD.' >&2
                   exit 1
                 fi
-
-                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
-                docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} .
-                docker tag ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
-                docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}
-                docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
-                echo "Docker image pushed to ECR: ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}"
+                aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
+                docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG} .
+                docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG}
               """
             }
           }
@@ -101,14 +85,12 @@ pipeline {
       }
     }
 
-    // plugin validation removed; pipeline now uses `yq` on the agent to parse YAML mappings
-
     stage('Validate AWS Access') {
       steps {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             sh 'aws sts get-caller-identity --region ${AWS_REGION}'
@@ -125,28 +107,17 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh """
                 if ! aws s3api head-bucket --bucket ${params.TF_STATE_BUCKET} --region ${AWS_REGION} 2>/dev/null; then
-                  echo "Creating Terraform state bucket: ${params.TF_STATE_BUCKET}"
                   aws s3api create-bucket --bucket ${params.TF_STATE_BUCKET} --region ${AWS_REGION} --create-bucket-configuration LocationConstraint=${AWS_REGION}
-                else
-                  echo "Terraform state bucket already exists: ${params.TF_STATE_BUCKET}"
                 fi
 
                 if ! aws dynamodb describe-table --table-name ${params.LOCK_TABLE} --region ${AWS_REGION} 2>/dev/null; then
-                  echo "Creating Terraform lock table: ${params.LOCK_TABLE}"
-                  aws dynamodb create-table \
-                    --table-name ${params.LOCK_TABLE} \
-                    --attribute-definitions AttributeName=LockID,AttributeType=S \
-                    --key-schema AttributeName=LockID,KeyType=HASH \
-                    --billing-mode PAY_PER_REQUEST \
-                    --region ${AWS_REGION}
-                else
-                  echo "Terraform lock table already exists: ${params.LOCK_TABLE}"
+                  aws dynamodb create-table --table-name ${params.LOCK_TABLE} --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST --region ${AWS_REGION}
                 fi
               """
             }
@@ -160,12 +131,11 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh """
-                echo "Initializing Terraform backend with state bucket ${params.TF_STATE_BUCKET} and lock table ${params.LOCK_TABLE}"
                 terraform init -reconfigure \
                   -backend-config="bucket=${params.TF_STATE_BUCKET}" \
                   -backend-config="key=terraform/terraform.tfstate" \
@@ -184,34 +154,25 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
-              script {
-                // prefer explicit ENVIRONMENT parameter; otherwise derive from branch metadata
-                def envParam = params.ENVIRONMENT?.trim()
-                def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
-                def raw = envParam ?: branchName
-                raw = raw.replaceAll('/','-')
-
-                def selected = null
-                def key = raw.toLowerCase()
-                if (key == 'main' || key == 'master' || key.startsWith('release') || key == 'prod') {
-                  selected = 'prod'
-                } else if (key == 'develop' || key == 'dev' || key == 'development') {
-                  selected = 'dev'
-                } else if (key == 'qa' || key == 'staging' || key == 'stage') {
-                  selected = 'qa'
-                } else {
-                  selected = raw.replaceAll('[^A-Za-z0-9_-]','-')
-                }
-
-                sh """
-                  echo "Using Terraform workspace: ${selected} (derived from '${raw}')"
-                  terraform workspace select ${selected} || terraform workspace new ${selected}
-                """
+              def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+              def rawName = params.ENVIRONMENT?.trim() ?: branchName
+              def workspace = rawName.toLowerCase().replaceAll('[^a-z0-9_-]', '-')
+              if (workspace in ['main','master','prod'] || workspace.startsWith('release')) {
+                workspace = 'prod'
+              } else if (workspace in ['develop','dev','development']) {
+                workspace = 'dev'
+              } else if (workspace in ['qa','staging','stage']) {
+                workspace = 'qa'
               }
+
+              sh """
+                echo 'Using Terraform workspace: ${workspace}'
+                terraform workspace select ${workspace} || terraform workspace new ${workspace}
+              """
             }
           }
         }
@@ -223,7 +184,7 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
@@ -240,7 +201,7 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
@@ -256,11 +217,10 @@ pipeline {
         script {
           def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
           if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
-              sh 'echo "Terraform apply will wait for AWS resources to finish creating, including EKS cluster creation."'
               sh 'terraform apply -auto-approve tfplan'
             }
           }
