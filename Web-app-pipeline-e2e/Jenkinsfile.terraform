@@ -153,6 +153,35 @@ pipeline {
       }
     }
 
+    stage('Import Existing Resources') {
+      steps {
+        script {
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+          }
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+            dir(env.TERRAFORM_DIR) {
+              sh '''
+                echo "Attempting to import existing AWS resources into Terraform state..."
+                
+                # Get the cluster name from terraform variables
+                CLUSTER_NAME=$(terraform output -raw cluster_name 2>/dev/null || echo "webapp-eks-cluster")
+                
+                # Try to import the EKS cluster if it exists in AWS but not in state
+                if aws eks describe-cluster --name ${CLUSTER_NAME} --region ${AWS_REGION} 2>/dev/null; then
+                  echo "Found existing EKS cluster: ${CLUSTER_NAME}"
+                  terraform import aws_eks_cluster.main ${CLUSTER_NAME} 2>&1 || echo "Cluster already in state or import skipped."
+                else
+                  echo "No existing EKS cluster found in AWS or already imported."
+                fi
+              '''
+            }
+          }
+        }
+      }
+    }
+
     stage('Terraform Plan') {
       steps {
         script {
