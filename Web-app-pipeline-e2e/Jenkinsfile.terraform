@@ -31,15 +31,11 @@ pipeline {
         checkout scm
         script {
           env.IMAGE_TAG = "${BUILD_NUMBER}-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
-          def branchCandidate = env.BRANCH_NAME ?: env.GIT_BRANCH
-          def fallbackBranch = sh(script: 'git rev-parse --abbrev-ref HEAD 2>/dev/null || echo DETACHED', returnStdout: true).trim()
-          def resolvedBranch = branchCandidate ?: fallbackBranch
           def terraformDir = sh(script: 'find . -type f -name "main.tf" | head -n 1 | sed -e "s|/main.tf$||" -e "s|^./||"', returnStdout: true).trim()
           if (!terraformDir) {
             error('Terraform module path not found. Ensure the repository contains main.tf.')
           }
           env.TERRAFORM_DIR = terraformDir
-          echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}, resolvedBranch=${resolvedBranch}"
           echo "Terraform module path: ${env.TERRAFORM_DIR}"
         }
       }
