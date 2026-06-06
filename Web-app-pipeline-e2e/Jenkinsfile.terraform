@@ -90,16 +90,14 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
               sh """
-                terraform init -reconfigure \
+                terraform -chdir=terraform init -reconfigure \
                   -backend-config="bucket=${params.TF_STATE_BUCKET}" \
                   -backend-config="key=terraform/terraform.tfstate" \
                   -backend-config="region=${AWS_REGION}" \
                   -backend-config="use_lockfile=true" \
                   -backend-config="dynamodb_table=${params.LOCK_TABLE}"
               """
-            }
           }
         }
       }
@@ -113,7 +111,6 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
               def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
               def rawName = params.ENVIRONMENT?.trim() ?: branchName
               def workspace = rawName.toLowerCase().replaceAll('[^a-z0-9_-]', '-')
@@ -127,9 +124,8 @@ pipeline {
 
               sh """
                 echo 'Using Terraform workspace: ${workspace}'
-                terraform workspace select ${workspace} || terraform workspace new ${workspace}
+                terraform -chdir=terraform workspace select ${workspace} || terraform -chdir=terraform workspace new ${workspace}
               """
-            }
           }
         }
       }
@@ -143,10 +139,8 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
-              sh 'terraform fmt -check'
-              sh 'terraform validate'
-            }
+              sh 'terraform -chdir=terraform fmt -check'
+              sh 'terraform -chdir=terraform validate'
           }
         }
       }
@@ -160,9 +154,7 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
-              sh 'terraform plan -out=tfplan'
-            }
+              sh 'terraform -chdir=terraform plan -out=tfplan'
           }
         }
       }
@@ -176,9 +168,7 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
-              sh 'terraform apply -auto-approve tfplan'
-            }
+              sh 'terraform -chdir=terraform apply -auto-approve tfplan'
           }
         }
       }
