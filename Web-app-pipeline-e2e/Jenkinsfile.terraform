@@ -181,22 +181,30 @@ pipeline {
         }
       }
     }
-
     stage('Terraform Plan') {
-      steps {
-        script {
-          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
-          if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
-          }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir(env.TERRAFORM_DIR) {
-              sh 'terraform plan -out=tfplan'
-            }
-          }
+  steps {
+    script {
+      def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+      if (!awsCreds) {
+        error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+      }
+
+      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+        dir(env.TERRAFORM_DIR) {
+          // Always init first
+          sh 'terraform init -input=false'
+
+          // Run plan and save output
+          sh 'terraform plan -out=tfplan'
+
+          // Show plan for review
+          sh 'terraform show tfplan > plan.txt'
         }
       }
     }
+  }
+}
+
 
     stage('Terraform Apply') {
       steps {
