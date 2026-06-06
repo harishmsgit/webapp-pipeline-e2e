@@ -181,7 +181,20 @@ pipeline {
         }
       }
     }
-    stage('Terraform Plan') {
+
+    stage('Destroy Node Groups') {
+  steps {
+    script {
+      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+        dir(env.TERRAFORM_DIR) {
+          sh 'terraform destroy -target=aws_eks_node_group.default -auto-approve'
+        }
+      }
+    }
+  }
+}
+
+stage('Terraform Plan') {
   steps {
     script {
       def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
