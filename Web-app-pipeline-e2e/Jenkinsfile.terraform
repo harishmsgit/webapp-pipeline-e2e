@@ -39,7 +39,7 @@ pipeline {
           env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
           env.IMAGE_TAG = "${BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
           def helper = sh(script: '''
-            helper=$(find . -type f \( -path '*/ci/parse_branch_env' -o -path '*/ci/parse_branch_env.py' \) | head -n 1)
+            helper=$(find . -type f \\(-path '*/ci/parse_branch_env' -o -path '*/ci/parse_branch_env.py' \\) | head -n 1)
             if [ -n "$helper" ]; then
               echo "$helper"
             else
