@@ -34,7 +34,13 @@ pipeline {
           def branchCandidate = env.BRANCH_NAME ?: env.GIT_BRANCH
           def fallbackBranch = sh(script: 'git rev-parse --abbrev-ref HEAD 2>/dev/null || echo DETACHED', returnStdout: true).trim()
           def resolvedBranch = branchCandidate ?: fallbackBranch
+          def terraformDir = sh(script: 'find . -type f -name "main.tf" | head -n 1 | sed -e "s|/main.tf$||" -e "s|^./||"', returnStdout: true).trim()
+          if (!terraformDir) {
+            error('Terraform module path not found. Ensure the repository contains main.tf.')
+          }
+          env.TERRAFORM_DIR = terraformDir
           echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}, resolvedBranch=${resolvedBranch}"
+          echo "Terraform module path: ${env.TERRAFORM_DIR}"
         }
       }
     }
@@ -66,7 +72,7 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
+            dir(env.TERRAFORM_DIR) {
               sh """
                 if ! aws s3api head-bucket --bucket ${params.TF_STATE_BUCKET} --region ${AWS_REGION} 2>/dev/null; then
                   aws s3api create-bucket --bucket ${params.TF_STATE_BUCKET} --region ${AWS_REGION} --create-bucket-configuration LocationConstraint=${AWS_REGION}
@@ -90,14 +96,16 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+            dir(env.TERRAFORM_DIR) {
               sh """
-                terraform -chdir=terraform init -reconfigure \
+                terraform init -reconfigure \
                   -backend-config="bucket=${params.TF_STATE_BUCKET}" \
                   -backend-config="key=terraform/terraform.tfstate" \
                   -backend-config="region=${AWS_REGION}" \
                   -backend-config="use_lockfile=true" \
                   -backend-config="dynamodb_table=${params.LOCK_TABLE}"
               """
+            }
           }
         }
       }
@@ -122,10 +130,12 @@ pipeline {
                 workspace = 'qa'
               }
 
-              sh """
-                echo 'Using Terraform workspace: ${workspace}'
-                terraform -chdir=terraform workspace select ${workspace} || terraform -chdir=terraform workspace new ${workspace}
-              """
+              dir(env.TERRAFORM_DIR) {
+                sh """
+                  echo 'Using Terraform workspace: ${workspace}'
+                  terraform workspace select ${workspace} || terraform workspace new ${workspace}
+                """
+              }
           }
         }
       }
@@ -139,7 +149,7 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
+            dir(env.TERRAFORM_DIR) {
               sh 'pwd && ls -la && terraform fmt -check && terraform validate'
             }
           }
@@ -155,7 +165,7 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            dir('terraform') {
+            dir(env.TERRAFORM_DIR) {
               sh 'pwd && ls -la && terraform plan -out=tfplan'
             }
           }
@@ -171,7 +181,9 @@ pipeline {
             error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-              sh 'terraform -chdir=terraform apply -auto-approve tfplan'
+            dir(env.TERRAFORM_DIR) {
+              sh 'terraform apply -auto-approve tfplan'
+            }
           }
         }
       }
