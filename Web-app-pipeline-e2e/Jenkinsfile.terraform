@@ -50,11 +50,12 @@ pipeline {
       }
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided to build and push Docker images to ECR from isolated EC2/Jenkins.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
 
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             def buildMethod = params.DOCKER_BUILD_METHOD ?: 'AUTO'
             if (buildMethod == 'AUTO' && params.CODEBUILD_PROJECT?.trim()) {
               buildMethod = 'CODEBUILD'
@@ -105,10 +106,11 @@ pipeline {
     stage('Validate AWS Access') {
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided so Jenkins can use stored AWS secrets for isolated EC2/AWS access.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             sh 'aws sts get-caller-identity --region ${AWS_REGION}'
           }
         }
@@ -121,10 +123,11 @@ pipeline {
       }
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided for backend creation in isolated Jenkins environments.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh """
                 if ! aws s3api head-bucket --bucket ${params.TF_STATE_BUCKET} --region ${AWS_REGION} 2>/dev/null; then
@@ -155,10 +158,11 @@ pipeline {
     stage('Terraform Init') {
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided for Terraform operations in isolated Jenkins environments.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh """
                 echo "Initializing Terraform backend with state bucket ${params.TF_STATE_BUCKET} and lock table ${params.LOCK_TABLE}"
@@ -178,10 +182,11 @@ pipeline {
     stage('Select Workspace') {
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided for Terraform workspace selection and AWS access.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               script {
                 // prefer explicit ENVIRONMENT parameter; otherwise derive from branch metadata
@@ -216,10 +221,11 @@ pipeline {
     stage('Terraform Validate') {
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided for Terraform validation in isolated Jenkins environments.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh 'terraform fmt -check'
               sh 'terraform validate'
@@ -232,10 +238,11 @@ pipeline {
     stage('Terraform Plan') {
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided for Terraform plan in isolated Jenkins environments.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh 'terraform plan -out=tfplan'
             }
@@ -247,10 +254,11 @@ pipeline {
     stage('Terraform Apply') {
       steps {
         script {
-          if (!params.AWS_CREDENTIALS_ID?.trim()) {
-            error('AWS_CREDENTIALS_ID must be provided for Terraform apply in isolated Jenkins environments.')
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided either as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
           }
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir('terraform') {
               sh 'echo "Terraform apply will wait for AWS resources to finish creating, including EKS cluster creation."'
               sh 'terraform apply -auto-approve tfplan'
