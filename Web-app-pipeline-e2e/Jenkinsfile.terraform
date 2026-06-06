@@ -31,7 +31,8 @@ pipeline {
         checkout scm
         script {
           env.IMAGE_TAG = "${BUILD_NUMBER}-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
-          echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}"
+          def resolvedBranch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+          echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}, resolvedBranch=${resolvedBranch}"
         }
       }
     }
