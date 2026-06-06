@@ -6,8 +6,6 @@ pipeline {
     string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state')
     string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform locking')
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
-    string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL')
-    string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'Skip S3/DynamoDB backend creation')
   }
@@ -34,32 +32,6 @@ pipeline {
         script {
           env.IMAGE_TAG = "${BUILD_NUMBER}-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
           echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}"
-        }
-      }
-    }
-
-    stage('Build and Push Docker Image') {
-      when {
-        expression { return params.ECR_REGISTRY?.trim() }
-      }
-      steps {
-        script {
-          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
-          if (!awsCreds) {
-            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
-          }
-
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-            sh """
-              if ! command -v docker >/dev/null 2>&1; then
-                echo 'ERROR: Docker is not installed on the agent. Install Docker on the agent before running this stage.' >&2
-                exit 1
-              fi
-              aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
-              docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG} .
-              docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${env.IMAGE_TAG}
-            """
-          }
         }
       }
     }
