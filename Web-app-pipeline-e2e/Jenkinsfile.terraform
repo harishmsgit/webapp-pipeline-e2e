@@ -8,7 +8,8 @@ pipeline {
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
     string(name: 'ECR_REGISTRY', defaultValue: '', description: 'ECR registry URL (e.g., 123456789.dkr.ecr.ap-south-1.amazonaws.com)')
     string(name: 'ECR_REPOSITORY', defaultValue: 'webapp', description: 'ECR repository name for app image')
-    string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional: CodeBuild project name for Docker build (if empty, uses local Docker)')
+    string(name: 'CODEBUILD_PROJECT', defaultValue: '', description: 'Optional: CodeBuild project name for Docker build if using CODEBUILD build method')
+    choice(name: 'DOCKER_BUILD_METHOD', choices: 'AUTO\nLOCAL\nCODEBUILD', description: 'Preferred Docker build method: AUTO uses CODEBUILD_PROJECT if set, otherwise local')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Required Jenkins AWS credentials ID to bind AWS CLI environment variables for isolated EC2/Jenkins access')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'If true, do not attempt to create S3/DynamoDB backend resources')
     booleanParam(name: 'BUILD_AND_PUSH_IMAGE', defaultValue: false, description: 'If true, build and push Docker image to ECR via CodeBuild')
@@ -38,21 +39,7 @@ pipeline {
         script {
           env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
           env.IMAGE_TAG = "${BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
-          def helper = sh(script: '''
-            helper=$(find . -type f \\(-path '*/ci/parse_branch_env' -o -path '*/ci/parse_branch_env.py' \\) | head -n 1)
-            if [ -n "$helper" ]; then
-              echo "$helper"
-            else
-              echo ""
-            fi
-          ''', returnStdout: true).trim()
-          env.BRANCH_HELPER_PATH = helper
-          if (helper) {
-            sh "chmod +x '${helper}' || true"
-            echo "Branch helper found at ${helper}"
-          } else {
-            echo 'Branch helper not found; using fallback branch-to-env heuristics.'
-          }
+          echo "Branch metadata: BRANCH_NAME=${env.BRANCH_NAME}, GIT_BRANCH=${env.GIT_BRANCH}"
         }
       }
     }
@@ -63,49 +50,21 @@ pipeline {
       }
       steps {
         script {
-          if (params.AWS_CREDENTIALS_ID?.trim()) {
-            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-              echo "Building Docker image via AWS CodeBuild..."
+          if (!params.AWS_CREDENTIALS_ID?.trim()) {
+            error('AWS_CREDENTIALS_ID must be provided to build and push Docker images to ECR from isolated EC2/Jenkins.')
+          }
 
-              if (params.CODEBUILD_PROJECT) {
-                sh """
-                  aws codebuild batch-get-builds --ids \$(aws codebuild start-build \
-                    --project-name ${params.CODEBUILD_PROJECT} \
-                    --source-version ${env.GIT_COMMIT} \
-                    --environment-variables-override \
-                      name=AWS_ACCOUNT_ID,value=\$(aws sts get-caller-identity --query Account --output text) \
-                      name=AWS_REGION,value=${AWS_REGION} \
-                      name=IMAGE_REPO_NAME,value=${params.ECR_REPOSITORY} \
-                      name=IMAGE_TAG,value=${IMAGE_TAG} \
-                      name=ECR_REGISTRY,value=${params.ECR_REGISTRY} \
-                    --query 'build.id' --output text) \
-                    --region ${AWS_REGION}
-                  
-                  echo "CodeBuild job started. Monitor in AWS Console: https://console.aws.amazon.com/codesuite/codebuild"
-                """
-              } else {
-                sh """
-                  echo "CodeBuild project not specified. Using local Docker..."
-                  
-                  # Login to ECR
-                  aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
-                  
-                  # Build image
-                  docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} .
-                  docker tag ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
-                  
-                  # Push to ECR
-                  docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}
-                  docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
-                  
-                  echo "Docker image pushed to ECR: ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}"
-                """
-              }
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+            def buildMethod = params.DOCKER_BUILD_METHOD ?: 'AUTO'
+            if (buildMethod == 'AUTO' && params.CODEBUILD_PROJECT?.trim()) {
+              buildMethod = 'CODEBUILD'
             }
-          } else {
-            echo "Building Docker image via AWS CodeBuild..."
 
-            if (params.CODEBUILD_PROJECT) {
+            if (buildMethod == 'CODEBUILD') {
+              if (!params.CODEBUILD_PROJECT?.trim()) {
+                error('CODEBUILD_PROJECT must be specified when DOCKER_BUILD_METHOD=CODEBUILD.')
+              }
+              echo "Starting AWS CodeBuild project ${params.CODEBUILD_PROJECT} to build and push Docker image..."
               sh """
                 aws codebuild batch-get-builds --ids \$(aws codebuild start-build \
                   --project-name ${params.CODEBUILD_PROJECT} \
@@ -118,24 +77,21 @@ pipeline {
                     name=ECR_REGISTRY,value=${params.ECR_REGISTRY} \
                   --query 'build.id' --output text) \
                   --region ${AWS_REGION}
-                
                 echo "CodeBuild job started. Monitor in AWS Console: https://console.aws.amazon.com/codesuite/codebuild"
               """
             } else {
+              echo "Building Docker image locally on EC2 and pushing to ECR..."
               sh """
-                echo "CodeBuild project not specified. Using local Docker..."
-                
-                # Login to ECR
+                if ! command -v docker >/dev/null 2>&1; then
+                  echo 'ERROR: Docker is not installed on the agent. Install Docker or set DOCKER_BUILD_METHOD=CODEBUILD.' >&2
+                  exit 1
+                fi
+
                 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.ECR_REGISTRY}
-                
-                # Build image
                 docker build -t ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} .
                 docker tag ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG} ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
-                
-                # Push to ECR
                 docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}
                 docker push ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:latest
-                
                 echo "Docker image pushed to ECR: ${params.ECR_REGISTRY}/${params.ECR_REPOSITORY}:${IMAGE_TAG}"
               """
             }
@@ -228,43 +184,22 @@ pipeline {
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
             dir('terraform') {
               script {
-                // prefer explicit ENVIRONMENT parameter; otherwise derive from branch using mapping file
+                // prefer explicit ENVIRONMENT parameter; otherwise derive from branch metadata
                 def envParam = params.ENVIRONMENT?.trim()
-                def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'dev'
+                def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
                 def raw = envParam ?: branchName
                 raw = raw.replaceAll('/','-')
 
-                // Portable: prefer executable wrapper, then Python helper, otherwise fall back to heuristics
                 def selected = null
-                def helperPath = env.BRANCH_HELPER_PATH?.trim()
-                def wrapperOk = 'missing'
-                if (helperPath) {
-                  wrapperOk = sh(script: "if [ -x '../${helperPath}' ]; then echo ok; else echo missing; fi", returnStdout: true).trim()
-                }
-                if (wrapperOk == 'ok') {
-                  selected = sh(script: "../${helperPath} --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
+                def key = raw.toLowerCase()
+                if (key == 'main' || key == 'master' || key.startsWith('release') || key == 'prod') {
+                  selected = 'prod'
+                } else if (key == 'develop' || key == 'dev' || key == 'development') {
+                  selected = 'dev'
+                } else if (key == 'qa' || key == 'staging' || key == 'stage') {
+                  selected = 'qa'
                 } else {
-                  def pythonCmd = sh(script: "command -v python3 >/dev/null 2>&1 && echo python3 || (command -v python >/dev/null 2>&1 && echo python) || echo missing", returnStdout: true).trim()
-                  if (pythonCmd != 'missing' && helperPath?.endsWith('.py')) {
-                    selected = sh(script: "${pythonCmd} ../${helperPath} --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
-                  } else if (pythonCmd != 'missing' && !helperPath) {
-                    selected = sh(script: "${pythonCmd} ../ci/parse_branch_env.py --branch '${branchName}' --env '${envParam}'", returnStdout: true).trim()
-                  } else {
-                    echo "No wrapper or python helper available on agent; falling back to built-in heuristics"
-                  }
-                }
-
-                if (!selected) {
-                  def key = raw.toLowerCase()
-                  if (key == 'main' || key == 'master' || key.startsWith('release') || key == 'prod') {
-                    selected = 'prod'
-                  } else if (key == 'develop' || key == 'dev' || key == 'development') {
-                    selected = 'dev'
-                  } else if (key == 'qa' || key == 'staging' || key == 'stage') {
-                    selected = 'qa'
-                  } else {
-                    selected = raw.replaceAll('[^A-Za-z0-9_-]','-')
-                  }
+                  selected = raw.replaceAll('[^A-Za-z0-9_-]','-')
                 }
 
                 sh """
