@@ -6,7 +6,7 @@ pipeline {
     string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state')
     string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform locking')
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
-    string(name: 'AWS_CREDENTIALS_ID', defaultValue: '', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-credentials', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'Skip S3/DynamoDB backend creation')
   }
 
@@ -185,7 +185,11 @@ pipeline {
     stage('Destroy Node Groups') {
   steps {
     script {
-      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+      def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+      if (!awsCreds) {
+        error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+      }
+      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
         dir(env.TERRAFORM_DIR) {
           sh 'terraform destroy -target=aws_eks_node_group.default -auto-approve'
         }
