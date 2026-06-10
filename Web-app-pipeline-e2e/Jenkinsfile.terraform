@@ -6,6 +6,7 @@ pipeline {
     string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state')
     string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform locking')
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
+    string(name: 'CLUSTER_NAME', defaultValue: 'webapp-eks-cluster', description: 'EKS cluster name to create or import if it already exists')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-credentials', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'Skip S3/DynamoDB backend creation')
   }
@@ -15,6 +16,7 @@ pipeline {
     TF_VAR_aws_region = "${params.AWS_REGION}"
     TF_VAR_state_bucket = "${params.TF_STATE_BUCKET}"
     TF_VAR_lock_table = "${params.LOCK_TABLE}"
+    TF_VAR_cluster_name = "${params.CLUSTER_NAME}"
     IMAGE_TAG = ''
   }
 
@@ -165,8 +167,7 @@ pipeline {
               sh '''
                 echo "Attempting to import existing AWS resources into Terraform state..."
                 
-                # Get the cluster name from terraform variables
-                CLUSTER_NAME=$(terraform output -raw cluster_name 2>/dev/null || echo "webapp-eks-cluster")
+                CLUSTER_NAME="${TF_VAR_cluster_name}"
                 
                 # Try to import the EKS cluster if it exists in AWS but not in state
                 if aws eks describe-cluster --name ${CLUSTER_NAME} --region ${AWS_REGION} 2>/dev/null; then

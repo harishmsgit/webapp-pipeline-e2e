@@ -137,6 +137,7 @@ aws sts get-caller-identity
    TF_STATE_BUCKET = harish-terraform-state-bucket
    LOCK_TABLE = my-terraform-lock-table
    ENVIRONMENT = dev
+   CLUSTER_NAME = webapp-eks-cluster
    ECR_REGISTRY = [leave blank]
    BUILD_AND_PUSH_IMAGE = false  ← Key: no Docker build yet
    SKIP_BACKEND_CREATION = false
@@ -164,6 +165,7 @@ aws sts get-caller-identity
    TF_STATE_BUCKET = harish-terraform-state-bucket
    LOCK_TABLE = my-terraform-lock-table
    ENVIRONMENT = dev
+   CLUSTER_NAME = webapp-eks-cluster
    ECR_REGISTRY = {ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com
    ECR_REPOSITORY = webapp
    BUILD_AND_PUSH_IMAGE = true  ← Key: now build Docker image

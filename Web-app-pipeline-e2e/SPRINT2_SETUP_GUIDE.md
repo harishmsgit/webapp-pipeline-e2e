@@ -51,6 +51,7 @@ aws dynamodb create-table \
    - `TF_STATE_BUCKET`: `my-terraform-state-bucket`
    - `LOCK_TABLE`: `my-terraform-lock-table`
    - `ENVIRONMENT`: `dev`
+   - `CLUSTER_NAME`: `webapp-eks-cluster`
 
 ### 3. Run the Jenkins Terraform Job
 Trigger the job manually from Jenkins.

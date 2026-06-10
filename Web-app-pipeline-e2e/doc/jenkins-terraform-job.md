@@ -31,6 +31,7 @@ The job uses the following parameters:
 - `TF_STATE_BUCKET`: S3 bucket name for Terraform state.
 - `LOCK_TABLE`: DynamoDB table name for Terraform lock state.
 - `ENVIRONMENT`: Environment identifier (`dev`, `staging`, `prod`).
+- `CLUSTER_NAME`: EKS cluster name to create, or import if it already exists.
 
 Example values:
 
@@ -38,6 +39,7 @@ Example values:
 - `TF_STATE_BUCKET` = `my-terraform-state-bucket`
 - `LOCK_TABLE` = `my-terraform-lock-table`
 - `ENVIRONMENT` = `dev`
+- `CLUSTER_NAME` = `webapp-eks-cluster`
 
 ## Required AWS Permissions
 
@@ -78,6 +80,7 @@ pipelineJob('terraform-infra-provisioning') {
     stringParam('TF_STATE_BUCKET', 'my-terraform-state-bucket', 'S3 bucket for Terraform state')
     stringParam('LOCK_TABLE', 'my-terraform-lock-table', 'DynamoDB table for state locking')
     stringParam('ENVIRONMENT', 'dev', 'Deployment environment')
+    stringParam('CLUSTER_NAME', 'webapp-eks-cluster', 'EKS cluster name to create or import')
   }
 }
 ```

@@ -578,6 +578,7 @@ terraform init -reconfigure \
    TF_STATE_BUCKET: harish-terraform-state-bucket
    LOCK_TABLE: my-terraform-lock-table
    ENVIRONMENT: dev
+   CLUSTER_NAME: webapp-eks-cluster
    ECR_REGISTRY: [leave blank for now]
    BUILD_AND_PUSH_IMAGE: false
    SKIP_BACKEND_CREATION: false
@@ -631,6 +632,7 @@ Plan: 50 to add, 0 to change, 0 destroy.
    AWS_REGION: ap-south-1
    TF_STATE_BUCKET: harish-terraform-state-bucket
    ENVIRONMENT: dev
+   CLUSTER_NAME: webapp-eks-cluster
    ECR_REGISTRY: 123456789.dkr.ecr.ap-south-1.amazonaws.com
    ECR_REPOSITORY: webapp
    BUILD_AND_PUSH_IMAGE: true
@@ -843,6 +845,7 @@ Before running pipeline, verify:
 - [ ] AWS_REGION: `ap-south-1` (matches bucket region)
 - [ ] TF_STATE_BUCKET: `harish-terraform-state-bucket`
 - [ ] LOCK_TABLE: `my-terraform-lock-table`
+- [ ] CLUSTER_NAME: `webapp-eks-cluster`
 - [ ] ECR_REGISTRY: `{ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com`
 - [ ] ECR_REPOSITORY: `webapp`
 
