@@ -118,7 +118,7 @@ docker run -p 3000:3000 web-app-sprint1:latest
 
 # Test with Docker Compose
 docker compose up --build
-# Access at http://localhost:5000
+# Access at http://localhost:3000
 ```
 
 ### 2️⃣ AWS Setup (10 minutes)

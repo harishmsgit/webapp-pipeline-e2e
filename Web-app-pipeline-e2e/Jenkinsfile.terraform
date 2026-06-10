@@ -182,45 +182,24 @@ pipeline {
       }
     }
 
-    stage('Destroy Node Groups') {
-  steps {
-    script {
-      def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
-      if (!awsCreds) {
-        error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
-      }
-      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-        dir(env.TERRAFORM_DIR) {
-          sh 'terraform destroy -target=aws_eks_node_group.default -auto-approve'
+    stage('Terraform Plan') {
+      steps {
+        script {
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
+          }
+
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+            dir(env.TERRAFORM_DIR) {
+              sh 'terraform init -input=false'
+              sh 'terraform plan -out=tfplan'
+              sh 'terraform show tfplan > plan.txt'
+            }
+          }
         }
       }
     }
-  }
-}
-
-stage('Terraform Plan') {
-  steps {
-    script {
-      def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
-      if (!awsCreds) {
-        error('AWS_CREDENTIALS_ID must be provided as a build parameter or via Jenkins environment variable AWS_CREDENTIALS_ID.')
-      }
-
-      withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
-        dir(env.TERRAFORM_DIR) {
-          // Always init first
-          sh 'terraform init -input=false'
-
-          // Run plan and save output
-          sh 'terraform plan -out=tfplan'
-
-          // Show plan for review
-          sh 'terraform show tfplan > plan.txt'
-        }
-      }
-    }
-  }
-}
 
 
     stage('Terraform Apply') {

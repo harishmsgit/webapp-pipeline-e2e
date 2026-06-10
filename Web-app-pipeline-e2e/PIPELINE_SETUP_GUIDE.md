@@ -140,7 +140,7 @@ aws configure
 
 # Verify access
 aws sts get-caller-identity
-aws s3api head-bucket --bucket harish-terraform-state-bucket --region us-west-2
+aws s3api head-bucket --bucket harish-terraform-state-bucket --region ap-south-1
 ```
 
 ---
@@ -260,7 +260,7 @@ This is perfect for **local development Jenkins** (not on EC2).
 
 ```groovy
 // In Jenkinsfile or Jenkins job config
-withAWS(credentials: 'aws-credentials', region: 'us-west-2') {
+withAWS(credentials: 'aws-credentials', region: 'ap-south-1') {
     sh 'aws sts get-caller-identity'  // Will work
 }
 ```
@@ -277,7 +277,7 @@ If you don't want to store credentials in Jenkins, use environment variables:
 # Windows PowerShell
 $env:AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
 $env:AWS_SECRET_ACCESS_KEY = "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"
-$env:AWS_DEFAULT_REGION = "us-west-2"
+$env:AWS_DEFAULT_REGION = "ap-south-1"
 
 # Verify
 aws sts get-caller-identity
@@ -530,7 +530,7 @@ Expected:
 # 2. Set environment variables (PowerShell)
 $env:AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
 $env:AWS_SECRET_ACCESS_KEY = "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"
-$env:AWS_DEFAULT_REGION = "us-west-2"
+$env:AWS_DEFAULT_REGION = "ap-south-1"
 
 # 3. Verify AWS CLI works
 aws sts get-caller-identity
@@ -628,7 +628,7 @@ Plan: 50 to add, 0 to change, 0 destroy.
 3. Click **Build with Parameters**
 4. Set parameters:
    ```
-   AWS_REGION: us-west-2
+   AWS_REGION: ap-south-1
    TF_STATE_BUCKET: harish-terraform-state-bucket
    ENVIRONMENT: dev
    ECR_REGISTRY: 123456789.dkr.ecr.ap-south-1.amazonaws.com
@@ -718,7 +718,7 @@ kubectl get pods --all-namespaces
 # List images in ECR
 aws ecr describe-images \
   --repository-name webapp \
-  --region us-west-2
+  --region ap-south-1
 
 # Expected: Image with tags like "42-a1b2c3d" and "latest"
 ```
@@ -776,7 +776,7 @@ Error: The region... does not exist
 **Solution:** Update backend.tf region to `ap-south-1`:
 ```hcl
 # terraform/backend.tf
-region = "us-west-2"
+region = "ap-south-1"
 ```
 
 ### Issue 3: "ECR login failed"
@@ -787,7 +787,7 @@ Error: no credentials provided
 **Solution:**
 ```bash
 # Ensure Jenkins has ECR permissions
-aws ecr get-login-password --region us-west-2 | docker login \
+aws ecr get-login-password --region ap-south-1 | docker login \
   --username AWS --password-stdin {ECR_REGISTRY}
 ```
 
@@ -873,18 +873,18 @@ aws dynamodb create-table \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
-  --region us-west-2
+  --region ap-south-1
 
 # 3. Create ECR repository
 aws ecr create-repository \
   --repository-name webapp \
-  --region us-west-2
+  --region ap-south-1
 
 # 4. Get ECR registry URL
 aws sts get-caller-identity --query Account --output text
 
 # Output: {ACCOUNT_ID}
-# ECR_REGISTRY: {ACCOUNT_ID}.dkr.ecr.us-west-2.amazonaws.com
+# ECR_REGISTRY: {ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com
 ```
 
 ### Test Jenkins

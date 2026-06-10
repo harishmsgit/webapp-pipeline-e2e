@@ -5,5 +5,5 @@ public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
 instance_type      = "t3.medium"
 allowed_ssh_cidr   = "0.0.0.0/0"
 cluster_name       = "webapp-eks-cluster"
-state_bucket       = "harish-s3-demo-01-06"
+state_bucket       = "harish-terraform-state-bucket"
 lock_table         = "my-terraform-lock-table"

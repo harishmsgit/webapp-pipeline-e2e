@@ -12,7 +12,7 @@ resource "aws_vpc" "main" {
 
   tags = {
     Name        = "${local.name_prefix}-vpc"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -21,7 +21,7 @@ resource "aws_internet_gateway" "main" {
 
   tags = {
     Name        = "${local.name_prefix}-igw"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -35,7 +35,7 @@ resource "aws_route_table" "public" {
 
   tags = {
     Name        = "${local.name_prefix}-public-rt"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -48,7 +48,7 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name        = "${local.name_prefix}-public-${count.index + 1}"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -80,7 +80,7 @@ resource "aws_security_group" "eks_cluster" {
 
   tags = {
     Name        = "${local.name_prefix}-eks-sg"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -114,7 +114,7 @@ resource "aws_security_group" "ec2" {
 
   tags = {
     Name        = "${local.name_prefix}-ec2-sg"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -137,7 +137,7 @@ resource "aws_iam_role" "eks_cluster" {
 
   tags = {
     Name        = "${local.name_prefix}-eks-cluster-role"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -170,7 +170,7 @@ resource "aws_iam_role" "eks_node_group" {
 
   tags = {
     Name        = "${local.name_prefix}-eks-node-group-role"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -233,7 +233,7 @@ resource "aws_iam_role" "alb_controller" {
 
   tags = {
     Name        = "${local.name_prefix}-alb-controller-role"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -307,7 +307,7 @@ resource "aws_eks_cluster" "main" {
 
   tags = {
     Name        = var.cluster_name
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -327,7 +327,7 @@ resource "aws_eks_node_group" "workers" {
 
   tags = {
     Name        = "${local.name_prefix}-workers"
-    Environment = var.environment
+    Environment = local.env
   }
 
   depends_on = [
@@ -393,7 +393,7 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
 
   tags = {
     Name        = "${local.name_prefix}-eks-logs"
-    Environment = var.environment
+    Environment = local.env
   }
 }
 
@@ -591,6 +591,6 @@ resource "aws_instance" "management" {
 
   tags = {
     Name        = "${local.name_prefix}-management-instance"
-    Environment = var.environment
+    Environment = local.env
   }
 }

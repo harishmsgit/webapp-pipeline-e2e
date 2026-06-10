@@ -157,7 +157,7 @@ docker compose config
 docker compose up --build
 ```
 
-Visit `http://localhost:5000` (note: docker-compose.yml uses port 5000).
+Visit `http://localhost:3000` (docker-compose.yml maps host port 3000 to container port 3000).
 
 Stop the container:
 ```bash

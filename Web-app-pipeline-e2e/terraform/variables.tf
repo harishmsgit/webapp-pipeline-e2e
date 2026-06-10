@@ -49,5 +49,5 @@ variable "state_bucket" {
 variable "lock_table" {
   description = "DynamoDB table name used for Terraform state locking"
   type        = string
-  default     = "harish-terraform-lock-table"
+  default     = "my-terraform-lock-table"
 }

@@ -25,8 +25,8 @@ Run these commands in your terminal:
 # 1. Create S3 bucket for Terraform state
 aws s3api create-bucket \
   --bucket harish-terraform-state-bucket \
-  --region us-west-2 \
-  --create-bucket-configuration LocationConstraint=us-west-2
+  --region ap-south-1 \
+  --create-bucket-configuration LocationConstraint=ap-south-1
 
 echo "✓ S3 bucket created"
 
@@ -36,14 +36,14 @@ aws dynamodb create-table \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
-  --region us-west-2
+  --region ap-south-1
 
 echo "✓ DynamoDB table created"
 
 # 3. Create ECR repository for Docker images
 aws ecr create-repository \
   --repository-name webapp \
-  --region us-west-2
+  --region ap-south-1
 
 echo "✓ ECR repository created"
 
@@ -133,7 +133,7 @@ aws sts get-caller-identity
 1. Click **Build with Parameters**
 2. Set:
    ```
-   AWS_REGION = us-west-2
+   AWS_REGION = ap-south-1
    TF_STATE_BUCKET = harish-terraform-state-bucket
    LOCK_TABLE = my-terraform-lock-table
    ENVIRONMENT = dev
@@ -160,7 +160,7 @@ aws sts get-caller-identity
 1. Click **Build with Parameters**
 2. Set:
    ```
-   AWS_REGION = us-west-2
+   AWS_REGION = ap-south-1
    TF_STATE_BUCKET = harish-terraform-state-bucket
    LOCK_TABLE = my-terraform-lock-table
    ENVIRONMENT = dev

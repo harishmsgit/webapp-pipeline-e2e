@@ -45,8 +45,8 @@
 # Create S3 bucket
 aws s3api create-bucket \
   --bucket harish-terraform-state-bucket \
-  --region us-west-2 \
-  --create-bucket-configuration LocationConstraint=us-west-2
+  --region ap-south-1 \
+  --create-bucket-configuration LocationConstraint=ap-south-1
 
 # Create DynamoDB table
 aws dynamodb create-table \
@@ -54,12 +54,12 @@ aws dynamodb create-table \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
-  --region us-west-2
+  --region ap-south-1
 
 # Create ECR repository
 aws ecr create-repository \
   --repository-name webapp \
-  --region us-west-2
+  --region ap-south-1
 
 # Get Account ID (needed for ECR URL)
 aws sts get-caller-identity --query Account --output text
@@ -121,7 +121,7 @@ Result:
 Build with Parameters:
   BUILD_AND_PUSH_IMAGE = true   ← Build & push Docker image
   SKIP_BACKEND_CREATION = true  ← Infrastructure already created
-  ECR_REGISTRY = 123456789.dkr.ecr.us-west-2.amazonaws.com
+  ECR_REGISTRY = 123456789.dkr.ecr.ap-south-1.amazonaws.com
 
 Pipeline executes:
   1. Checkout code
@@ -173,7 +173,7 @@ After successful pipeline execution:
 
 ### Step 4: Verify Backend Fix
 ```bash
-# Check terraform/backend.tf - should have region = "us-west-2"
+# Check terraform/backend.tf - should have region = "ap-south-1"
 # ✓ Already done
 ```
 
@@ -280,7 +280,7 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 
 | Issue | Root Cause | Fix |
 |-------|-----------|-----|
-| Backend init fails | Wrong region | ✓ Fixed (region = us-west-2) |
+| Backend init fails | Wrong region | ✓ Fixed (region = ap-south-1) |
 | Credentials not found | No IAM role/user | Add AWS credentials in Jenkins |
 | ECR push fails | Repo doesn't exist | Run aws ecr create-repository |
 | ALB pending | Takes time | Wait 2-3 minutes, check controller logs |
@@ -309,7 +309,7 @@ Before first pipeline run:
 - [ ] IAM role/user created with permissions
 - [ ] Jenkins credentials configured
 - [ ] Pipeline job created
-- [ ] backend.tf region set to us-west-2 ✓
+- [ ] backend.tf region set to ap-south-1 ✓
 - [ ] Git repo connected to Jenkins
 - [ ] Docker installed on agent (if using local build)
 
