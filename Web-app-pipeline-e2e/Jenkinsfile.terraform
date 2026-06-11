@@ -16,7 +16,6 @@ pipeline {
     TF_VAR_aws_region = "${params.AWS_REGION}"
     TF_VAR_state_bucket = "${params.TF_STATE_BUCKET}"
     TF_VAR_lock_table = "${params.LOCK_TABLE}"
-    TF_VAR_cluster_name = "${params.CLUSTER_NAME}"
     IMAGE_TAG = ''
   }
 
@@ -33,6 +32,7 @@ pipeline {
         checkout scm
         script {
           env.IMAGE_TAG = "${BUILD_NUMBER}-${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
+          env.TF_VAR_cluster_name = params.CLUSTER_NAME?.trim() ?: 'webapp-eks-cluster'
           def terraformDir = sh(script: 'find . -type f -name "main.tf" | head -n 1 | sed -e "s|/main.tf$||" -e "s|^./||"', returnStdout: true).trim()
           if (!terraformDir) {
             error('Terraform module path not found. Ensure the repository contains main.tf.')
@@ -167,12 +167,19 @@ pipeline {
               sh '''
                 echo "Attempting to import existing AWS resources into Terraform state..."
                 
-                CLUSTER_NAME="${TF_VAR_cluster_name}"
+                CLUSTER_NAME="${TF_VAR_cluster_name:-webapp-eks-cluster}"
+                if [ -z "$CLUSTER_NAME" ] || [ "$CLUSTER_NAME" = "null" ]; then
+                  CLUSTER_NAME="webapp-eks-cluster"
+                fi
                 
                 # Try to import the EKS cluster if it exists in AWS but not in state
-                if aws eks describe-cluster --name ${CLUSTER_NAME} --region ${AWS_REGION} 2>/dev/null; then
+                if aws eks describe-cluster --name "${CLUSTER_NAME}" --region ${AWS_REGION} 2>/dev/null; then
                   echo "Found existing EKS cluster: ${CLUSTER_NAME}"
-                  terraform import aws_eks_cluster.main ${CLUSTER_NAME} 2>&1 || echo "Cluster already in state or import skipped."
+                  if terraform state show aws_eks_cluster.main >/dev/null 2>&1; then
+                    echo "EKS cluster is already managed in Terraform state. Skipping import."
+                  else
+                    terraform import aws_eks_cluster.main "${CLUSTER_NAME}"
+                  fi
                 else
                   echo "No existing EKS cluster found in AWS or already imported."
                 fi
