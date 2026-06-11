@@ -201,7 +201,32 @@ pipeline {
           withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
             dir(env.TERRAFORM_DIR) {
               sh 'terraform init -input=false'
-              sh 'terraform plan -out=tfplan'
+              sh '''
+                SPRINT2_TARGETS="
+                  -target=aws_vpc.main
+                  -target=aws_internet_gateway.main
+                  -target=aws_route_table.public
+                  -target=aws_subnet.public
+                  -target=aws_route_table_association.public
+                  -target=aws_security_group.eks_cluster
+                  -target=aws_security_group.ec2
+                  -target=aws_iam_role.eks_cluster
+                  -target=aws_iam_role_policy_attachment.cluster_policy
+                  -target=aws_iam_role_policy_attachment.service_policy
+                  -target=aws_iam_role.eks_node_group
+                  -target=aws_iam_role_policy_attachment.node_policy
+                  -target=aws_iam_role_policy_attachment.cni_policy
+                  -target=aws_iam_role_policy_attachment.ecr_readonly_policy
+                  -target=aws_iam_role_policy_attachment.ssm_policy
+                  -target=aws_iam_role_policy_attachment.cloudwatch_policy
+                  -target=aws_eks_cluster.main
+                  -target=aws_eks_node_group.workers
+                  -target=aws_cloudwatch_log_group.eks_cluster
+                  -target=aws_instance.management
+                "
+
+                terraform plan ${SPRINT2_TARGETS} -out=tfplan
+              '''
               sh 'terraform show tfplan > plan.txt'
             }
           }
