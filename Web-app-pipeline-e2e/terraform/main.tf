@@ -291,6 +291,10 @@ resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   vpc_config {
     subnet_ids              = aws_subnet.public[*].id
     security_group_ids      = [aws_security_group.eks_cluster.id]
