@@ -1,0 +1,19 @@
+---
+- name: Install base packages
+  ansible.builtin.yum:
+    name:
+      - curl
+      - git
+      - unzip
+      - tar
+      - jq
+      - python3
+      - python3-pip
+      - yum-utils
+    state: present
+    update_cache: true
+
+- name: Upgrade installed packages
+  ansible.builtin.yum:
+    name: "*"
+    state: latest

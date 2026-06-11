@@ -1,0 +1,25 @@
+---
+- name: Configure EC2 management host for the DevOps pipeline
+  hosts: management
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - docker
+    - kubectl
+    - aws_cli
+
+  post_tasks:
+    - name: Configure kubeconfig for EKS when AWS credentials or instance profile are available
+      become: false
+      ansible.builtin.command:
+        cmd: aws eks update-kubeconfig --region {{ aws_region }} --name {{ eks_cluster_name }}
+      register: kubeconfig_update
+      changed_when: "'Updated context' in kubeconfig_update.stdout or 'Added new context' in kubeconfig_update.stdout"
+      failed_when: false
+
+    - name: Show kubeconfig warning when update failed
+      ansible.builtin.debug:
+        msg: "Kubeconfig was not updated. Attach AWS permissions to the EC2 role or provide AWS credentials on the host before Kubernetes deployment."
+      when: kubeconfig_update.rc != 0

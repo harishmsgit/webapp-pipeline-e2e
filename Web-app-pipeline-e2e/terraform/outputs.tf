@@ -22,3 +22,8 @@ output "management_ec2_public_ip" {
   description = "Public IP address of the management EC2 instance"
   value       = aws_instance.management.public_ip
 }
+
+output "management_ec2_private_ip" {
+  description = "Private IP address of the management EC2 instance"
+  value       = aws_instance.management.private_ip
+}

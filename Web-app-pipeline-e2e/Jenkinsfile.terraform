@@ -8,6 +8,10 @@ pipeline {
     string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment name')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-credentials', description: 'Jenkins AWS credentials ID or set AWS_CREDENTIALS_ID in the environment')
     booleanParam(name: 'SKIP_BACKEND_CREATION', defaultValue: false, description: 'Skip S3/DynamoDB backend creation')
+    booleanParam(name: 'RUN_ANSIBLE_AFTER_APPLY', defaultValue: true, description: 'Trigger the Ansible configuration job after Terraform apply succeeds')
+    string(name: 'ANSIBLE_JOB_NAME', defaultValue: 'webapp-ansible-config', description: 'Jenkins job name that uses Jenkinsfile.ansible')
+    string(name: 'SSH_PRIVATE_KEY_CREDENTIALS_ID', defaultValue: 'management-ec2-ssh-key', description: 'SSH private key credential passed to the Ansible job')
+    string(name: 'REMOTE_USER', defaultValue: 'ec2-user', description: 'SSH user passed to the Ansible job')
   }
 
   environment {
@@ -125,6 +129,7 @@ pipeline {
               } else if (workspace in ['qa','staging','stage']) {
                 workspace = 'qa'
               }
+              env.TF_WORKSPACE = workspace
 
               dir(env.TERRAFORM_DIR) {
                 sh """
@@ -222,6 +227,22 @@ pipeline {
   post {
     success {
       echo 'Terraform provisioning completed successfully.'
+      script {
+        if (params.RUN_ANSIBLE_AFTER_APPLY) {
+          build job: params.ANSIBLE_JOB_NAME,
+            wait: true,
+            propagate: true,
+            parameters: [
+              string(name: 'AWS_REGION', value: params.AWS_REGION),
+              string(name: 'TF_STATE_BUCKET', value: params.TF_STATE_BUCKET),
+              string(name: 'LOCK_TABLE', value: params.LOCK_TABLE),
+              string(name: 'ENVIRONMENT', value: env.TF_WORKSPACE ?: params.ENVIRONMENT),
+              string(name: 'AWS_CREDENTIALS_ID', value: params.AWS_CREDENTIALS_ID),
+              string(name: 'SSH_PRIVATE_KEY_CREDENTIALS_ID', value: params.SSH_PRIVATE_KEY_CREDENTIALS_ID),
+              string(name: 'REMOTE_USER', value: params.REMOTE_USER)
+            ]
+        }
+      }
     }
     failure {
       echo 'Terraform provisioning failed. Review logs and fix any issues.'

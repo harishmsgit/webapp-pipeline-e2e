@@ -40,6 +40,12 @@ variable "cluster_name" {
   default     = "webapp-eks-cluster"
 }
 
+variable "management_key_name" {
+  description = "Existing EC2 key pair name used for SSH access to the management instance. Required for Sprint 3 Ansible over SSH."
+  type        = string
+  default     = null
+}
+
 variable "state_bucket" {
   description = "S3 bucket name used to store Terraform state"
   type        = string

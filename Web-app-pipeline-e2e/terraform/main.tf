@@ -199,6 +199,75 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_policy" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
+data "aws_iam_policy_document" "management_assume" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "management" {
+  name               = "${local.name_prefix}-management-role"
+  assume_role_policy = data.aws_iam_policy_document.management_assume.json
+
+  tags = {
+    Name        = "${local.name_prefix}-management-role"
+    Environment = local.env
+  }
+}
+
+resource "aws_iam_policy" "management_kubernetes_access" {
+  name        = "${local.name_prefix}-management-kubernetes-access"
+  description = "Allows the management EC2 instance to discover EKS and authenticate Docker to ECR"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "management_kubernetes_access" {
+  role       = aws_iam_role.management.name
+  policy_arn = aws_iam_policy.management_kubernetes_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "management_ssm" {
+  role       = aws_iam_role.management.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "management_ecr_readonly" {
+  role       = aws_iam_role.management.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_instance_profile" "management" {
+  name = "${local.name_prefix}-management-profile"
+  role = aws_iam_role.management.name
+}
+
 # OIDC Provider for ALB Ingress Controller
 data "tls_certificate" "cluster" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
@@ -585,6 +654,8 @@ data "aws_ami" "amazon_linux_2" {
 resource "aws_instance" "management" {
   ami                         = data.aws_ami.amazon_linux_2.id
   instance_type               = var.instance_type
+  key_name                    = var.management_key_name
+  iam_instance_profile        = aws_iam_instance_profile.management.name
   subnet_id                   = aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   associate_public_ip_address = true

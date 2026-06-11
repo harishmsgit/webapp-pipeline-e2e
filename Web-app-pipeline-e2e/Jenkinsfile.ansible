@@ -1,0 +1,140 @@
+pipeline {
+  agent any
+
+  parameters {
+    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region used by Terraform and EKS')
+    string(name: 'TF_STATE_BUCKET', defaultValue: 'harish-terraform-state-bucket', description: 'S3 bucket for Terraform state')
+    string(name: 'LOCK_TABLE', defaultValue: 'my-terraform-lock-table', description: 'DynamoDB table for Terraform locking')
+    string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Terraform workspace/environment to read outputs from')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-credentials', description: 'Jenkins AWS credentials ID')
+    string(name: 'SSH_PRIVATE_KEY_CREDENTIALS_ID', defaultValue: 'management-ec2-ssh-key', description: 'Jenkins SSH private key credentials for the management EC2 instance')
+    string(name: 'REMOTE_USER', defaultValue: 'ec2-user', description: 'SSH user for the management EC2 instance')
+  }
+
+  environment {
+    AWS_REGION = "${params.AWS_REGION}"
+    TF_VAR_aws_region = "${params.AWS_REGION}"
+    TF_VAR_state_bucket = "${params.TF_STATE_BUCKET}"
+    TF_VAR_lock_table = "${params.LOCK_TABLE}"
+  }
+
+  options {
+    skipDefaultCheckout()
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        script {
+          def projectDir = sh(script: 'find . -type f -name "Jenkinsfile.ansible" | head -n 1 | sed -e "s|/Jenkinsfile.ansible$||" -e "s|^./||"', returnStdout: true).trim()
+          if (!projectDir) {
+            error('Project path not found. Ensure the repository contains Jenkinsfile.ansible.')
+          }
+
+          env.PROJECT_DIR = projectDir
+          env.ANSIBLE_CONFIG = "${WORKSPACE}/${projectDir}/ansible/ansible.cfg"
+          env.INVENTORY_FILE = "${WORKSPACE}/${projectDir}/ansible/inventories/generated/hosts.ini"
+          env.TF_OUTPUT_FILE = "${WORKSPACE}/${projectDir}/ansible/terraform-outputs.json"
+          echo "Project path: ${env.PROJECT_DIR}"
+        }
+      }
+    }
+
+    stage('Validate Tooling') {
+      steps {
+        dir(env.PROJECT_DIR) {
+          sh '''
+            ansible --version
+            terraform version
+            aws --version
+            python3 --version
+          '''
+        }
+      }
+    }
+
+    stage('Read Terraform Outputs') {
+      steps {
+        script {
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or Jenkins environment variable.')
+          }
+
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+            dir("${env.PROJECT_DIR}/terraform") {
+              sh """
+                terraform init -input=false -reconfigure \
+                  -backend-config="bucket=${params.TF_STATE_BUCKET}" \
+                  -backend-config="key=terraform/terraform.tfstate" \
+                  -backend-config="region=${AWS_REGION}" \
+                  -backend-config="use_lockfile=true" \
+                  -backend-config="dynamodb_table=${params.LOCK_TABLE}"
+                terraform workspace select ${params.ENVIRONMENT}
+                terraform output -json > "${TF_OUTPUT_FILE}"
+              """
+            }
+          }
+        }
+      }
+    }
+
+    stage('Generate Inventory') {
+      steps {
+        dir(env.PROJECT_DIR) {
+          sh '''
+            python3 scripts/generate_ansible_inventory.py \
+              --terraform-output "${TF_OUTPUT_FILE}" \
+              --inventory "${INVENTORY_FILE}" \
+              --remote-user "${REMOTE_USER}"
+            cat "${INVENTORY_FILE}"
+          '''
+        }
+      }
+    }
+
+    stage('Configure Management EC2') {
+      steps {
+        dir(env.PROJECT_DIR) {
+          sshagent(credentials: [params.SSH_PRIVATE_KEY_CREDENTIALS_ID]) {
+            sh '''
+              EKS_CLUSTER_NAME=$(python3 -c "import json; print(json.load(open('${TF_OUTPUT_FILE}'))['eks_cluster_name']['value'])")
+              ansible-playbook \
+                -i "${INVENTORY_FILE}" \
+                ansible/playbooks/configure-management.yml \
+                -e "aws_region=${AWS_REGION}" \
+                -e "eks_cluster_name=${EKS_CLUSTER_NAME}"
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Validate Configuration') {
+      steps {
+        dir(env.PROJECT_DIR) {
+          sshagent(credentials: [params.SSH_PRIVATE_KEY_CREDENTIALS_ID]) {
+            sh '''
+              ansible-playbook \
+                -i "${INVENTORY_FILE}" \
+                ansible/playbooks/validate-management.yml
+            '''
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo 'Ansible configuration completed and validated successfully.'
+    }
+    failure {
+      echo 'Ansible configuration failed. Review connection, SSH key, and package installation logs.'
+    }
+  }
+}
