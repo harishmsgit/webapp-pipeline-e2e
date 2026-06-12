@@ -38,11 +38,90 @@ Create these Jenkins credentials:
 
 ## Jobs
 
-Create a Jenkins Pipeline job for Terraform using `Jenkinsfile.terraform`.
+Create a Jenkins Pipeline job for Terraform:
 
-Create a second Jenkins Pipeline job for Ansible using `Jenkinsfile.ansible`. Name it `webapp-ansible-config` or pass another name through the Terraform job parameter `ANSIBLE_JOB_NAME`.
+- Job name: `webapp-terraform`
+- Job type: Pipeline
+- Definition: Pipeline script from SCM
+- Script Path: `Web-app-pipeline-e2e/Jenkinsfile.terraform`
 
-When `RUN_ANSIBLE_AFTER_APPLY` is enabled, the Terraform pipeline triggers the Ansible job after `terraform apply` succeeds.
+Create a second Jenkins Pipeline job for Ansible:
+
+- Job name: `webapp-ansible-config`
+- Job type: Pipeline
+- Definition: Pipeline script from SCM
+- Script Path: `Web-app-pipeline-e2e/Jenkinsfile.ansible`
+
+The Terraform job manages the handoff to the Ansible job. When `RUN_ANSIBLE_AFTER_APPLY` is enabled, the Terraform pipeline triggers the Ansible job after `terraform apply` succeeds.
+
+The Terraform job parameter `ANSIBLE_JOB_NAME` must match the Ansible job name. If the Ansible job is named `webapp-ansible-config`, keep the default value.
+
+Pipeline flow:
+
+```text
+webapp-terraform
+        |
+        | after terraform apply succeeds
+        v
+webapp-ansible-config
+```
+
+The Terraform job passes these values into the Ansible job:
+
+- `AWS_REGION`
+- `TF_STATE_BUCKET`
+- `LOCK_TABLE`
+- `ENVIRONMENT`
+- `AWS_CREDENTIALS_ID`
+- `SSH_PRIVATE_KEY_CREDENTIALS_ID`
+- `REMOTE_USER`
+
+## Production Environment
+
+For production, use separate Jenkins jobs, credentials, state storage, and Terraform workspace values. Do not reuse development credentials or state.
+
+Recommended production jobs:
+
+- Terraform job name: `webapp-terraform-prod`
+- Ansible job name: `webapp-ansible-prod`
+
+Both jobs can use the same repository files:
+
+- Terraform Script Path: `Web-app-pipeline-e2e/Jenkinsfile.terraform`
+- Ansible Script Path: `Web-app-pipeline-e2e/Jenkinsfile.ansible`
+
+Use these production parameter values in the Terraform job:
+
+```text
+ENVIRONMENT=prod
+ANSIBLE_JOB_NAME=webapp-ansible-prod
+AWS_REGION=ap-south-1
+TF_STATE_BUCKET=webapp-prod-terraform-state
+LOCK_TABLE=webapp-prod-terraform-lock
+SSH_PRIVATE_KEY_CREDENTIALS_ID=prod-management-ec2-ssh-key
+REMOTE_USER=ec2-user
+RUN_ANSIBLE_AFTER_APPLY=true
+```
+
+Production flow:
+
+```text
+webapp-terraform-prod
+        |
+        | after terraform apply succeeds
+        v
+webapp-ansible-prod
+```
+
+Production controls:
+
+- Use a dedicated production S3 state bucket or state key.
+- Use a dedicated production DynamoDB lock table.
+- Use a dedicated production EC2 key pair and Jenkins SSH credential.
+- Restrict `allowed_ssh_cidr` to your office VPN, bastion, or Jenkins agent IP range.
+- Add a manual approval stage before `terraform apply` if the job is used for real production infrastructure.
+- Scope Jenkins credentials so only production jobs can access production AWS and SSH secrets.
+- Keep `RUN_ANSIBLE_AFTER_APPLY=false` during first production dry runs, then enable it after the playbook is validated.
 
 ## Local Validation
 
