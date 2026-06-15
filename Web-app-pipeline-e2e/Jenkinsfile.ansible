@@ -48,6 +48,7 @@ pipeline {
       steps {
         dir(env.PROJECT_DIR) {
           sh '''
+            . scripts/ensure_ansible.sh
             ansible --version
             terraform version
             aws --version
@@ -102,6 +103,7 @@ pipeline {
         dir(env.PROJECT_DIR) {
           sshagent(credentials: [params.SSH_PRIVATE_KEY_CREDENTIALS_ID]) {
             sh '''
+              . scripts/ensure_ansible.sh
               EKS_CLUSTER_NAME=$(python3 -c "import json; print(json.load(open('${TF_OUTPUT_FILE}'))['eks_cluster_name']['value'])")
               ansible-playbook \
                 -i "${INVENTORY_FILE}" \
@@ -119,6 +121,7 @@ pipeline {
         dir(env.PROJECT_DIR) {
           sshagent(credentials: [params.SSH_PRIVATE_KEY_CREDENTIALS_ID]) {
             sh '''
+              . scripts/ensure_ansible.sh
               ansible-playbook \
                 -i "${INVENTORY_FILE}" \
                 ansible/playbooks/validate-management.yml
