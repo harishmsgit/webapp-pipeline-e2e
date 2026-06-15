@@ -8,9 +8,9 @@ run_as_root() {
   if [ "$(id -u)" -eq 0 ]; then
     "$@"
   elif command -v sudo >/dev/null 2>&1; then
-    sudo "$@"
+    sudo -n "$@"
   else
-    echo "sudo is required to install Python packaging dependencies on this Jenkins agent." >&2
+    echo "Passwordless sudo is required to install Python packaging dependencies on this Jenkins agent." >&2
     return 1
   fi
 }
@@ -29,6 +29,36 @@ install_python_packaging() {
   fi
 }
 
+install_user_pip() {
+  if python3 -c "import pip" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  GET_PIP="${TMPDIR:-/tmp}/get-pip.py"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "${GET_PIP}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q https://bootstrap.pypa.io/get-pip.py -O "${GET_PIP}"
+  else
+    python3 -c "import urllib.request; urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', '${GET_PIP}')"
+  fi
+
+  python3 "${GET_PIP}" --user
+}
+
+install_user_ansible() {
+  install_user_pip
+  if ! python3 -m pip install --user "${ANSIBLE_VERSION_SPEC}"; then
+    if ! python3 -m pip install --user --break-system-packages "${ANSIBLE_VERSION_SPEC}"; then
+      return 1
+    fi
+  fi
+
+  USER_BASE="$(python3 -m site --user-base)"
+  export PATH="${USER_BASE}/bin:${PATH}"
+}
+
 if command -v ansible >/dev/null 2>&1 && command -v ansible-playbook >/dev/null 2>&1; then
   return 0 2>/dev/null || exit 0
 fi
@@ -42,14 +72,20 @@ if [ ! -x "${VENV_DIR}/bin/ansible" ]; then
   rm -rf "${VENV_DIR}"
 
   if ! python3 -m venv "${VENV_DIR}"; then
-    install_python_packaging
-    rm -rf "${VENV_DIR}"
-    python3 -m venv "${VENV_DIR}"
+    if install_user_ansible; then
+      :
+    else
+      install_python_packaging
+      rm -rf "${VENV_DIR}"
+      python3 -m venv "${VENV_DIR}"
+    fi
   fi
 
-  "${VENV_DIR}/bin/python" -m pip install --upgrade pip
-  "${VENV_DIR}/bin/python" -m pip install "${ANSIBLE_VERSION_SPEC}"
-  export PATH="$(pwd)/${VENV_DIR}/bin:${PATH}"
+  if [ -x "${VENV_DIR}/bin/python" ]; then
+    "${VENV_DIR}/bin/python" -m pip install --upgrade pip
+    "${VENV_DIR}/bin/python" -m pip install "${ANSIBLE_VERSION_SPEC}"
+    export PATH="$(pwd)/${VENV_DIR}/bin:${PATH}"
+  fi
 else
   export PATH="$(pwd)/${VENV_DIR}/bin:${PATH}"
 fi
