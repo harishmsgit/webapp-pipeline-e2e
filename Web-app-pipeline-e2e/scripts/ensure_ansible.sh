@@ -29,11 +29,7 @@ install_python_packaging() {
   fi
 }
 
-install_user_pip() {
-  if python3 -c "import pip" >/dev/null 2>&1; then
-    return 0
-  fi
-
+download_get_pip() {
   GET_PIP="${TMPDIR:-/tmp}/get-pip.py"
 
   if command -v curl >/dev/null 2>&1; then
@@ -43,8 +39,24 @@ install_user_pip() {
   else
     python3 -c "import urllib.request; urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', '${GET_PIP}')"
   fi
+}
 
+install_user_pip() {
+  if python3 -c "import pip" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  download_get_pip
   python3 "${GET_PIP}" --user
+}
+
+bootstrap_venv_without_pip() {
+  if python3 -m venv --without-pip "${VENV_DIR}"; then
+    download_get_pip
+    "${VENV_DIR}/bin/python" "${GET_PIP}"
+    return 0
+  fi
+  return 1
 }
 
 install_user_ansible() {
@@ -72,7 +84,9 @@ if [ ! -x "${VENV_DIR}/bin/ansible" ]; then
   rm -rf "${VENV_DIR}"
 
   if ! python3 -m venv "${VENV_DIR}"; then
-    if install_user_ansible; then
+    if bootstrap_venv_without_pip; then
+      :
+    elif install_user_ansible; then
       :
     else
       install_python_packaging

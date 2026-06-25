@@ -25,11 +25,12 @@ The default is `null` to avoid changing existing environments, but SSH-based Ans
 Install these on the Jenkins agent:
 
 - Terraform
-- Ansible, or Python 3 with outbound HTTPS access so the Ansible pipeline can bootstrap user-local `pip` and `ansible-core`
+- Python 3 with outbound HTTPS access so the Ansible pipeline can bootstrap user-local `pip`, `python3-venv`, and `ansible-core`
 - AWS CLI
-- Python 3
 - Jenkins `SSH Agent` plugin
 - Jenkins AWS credentials binding plugin
+
+The Jenkins agent should either have `python3-venv`/`python3-pip` installed, or support passwordless sudo for package installation. If the agent cannot install packages, pre-install those runtime dependencies before running the pipeline.
 
 Create these Jenkins credentials:
 
