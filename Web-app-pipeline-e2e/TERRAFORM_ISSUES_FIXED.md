@@ -13,6 +13,15 @@ Terraform was still pointing to an old management instance, so the pipeline gene
 ### Result
 The Terraform output now resolves to the correct public IP for the management EC2 instance.
 
+### Commands used
+```bash
+terraform state list
+terraform state rm aws_instance.management
+terraform import aws_instance.management i-07d0a87512eac1f1c
+terraform refresh
+terraform output -json
+```
+
 ---
 
 ## 2. Terraform backend/state mismatch
@@ -26,6 +35,14 @@ Terraform could not fully refresh the remote state because the backend state and
 
 ### Result
 Terraform could successfully read the workspace state and produce outputs for the pipeline.
+
+### Commands used
+```bash
+terraform init -reconfigure -backend-config="bucket=harish-terraform-state-bucket" -backend-config="key=terraform/terraform.tfstate" -backend-config="region=ap-south-1" -backend-config="use_lockfile=true" -backend-config="dynamodb_table=my-terraform-lock-table"
+terraform workspace select dev
+terraform workspace show
+terraform state list
+```
 
 ---
 

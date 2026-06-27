@@ -12,6 +12,16 @@ The Jenkins agent could reach the EC2 host on port 22, but Ansible was failing t
 ### Result
 Ansible could establish an SSH connection to the management EC2 host successfully.
 
+### Commands used
+```bash
+ansible-playbook -vvv -i ansible/inventories/generated/hosts.ini ansible/playbooks/configure-management.yml \
+  -e "aws_region=ap-south-1" \
+  -e "eks_cluster_name=webapp-eks-cluster" \
+  -e "ansible_user=ubuntu" \
+  -e "ansible_ssh_private_key_file=$SSH_KEY_FILE" \
+  -e "ansible_private_key_file=$SSH_KEY_FILE"
+```
+
 ---
 
 ## 2. Docker role failed because `docker_users` was undefined
@@ -35,6 +45,15 @@ The Kubectl role tried to build a download URL using `kubectl_version`, but the 
 
 ### Result
 The Kubectl installation step now proceeds without failing on an undefined variable.
+
+### Commands used
+```bash
+python3 scripts/generate_ansible_inventory.py \
+  --terraform-output ansible/terraform-outputs.json \
+  --inventory ansible/inventories/generated/hosts.ini \
+  --remote-user ubuntu
+cat ansible/inventories/generated/hosts.ini
+```
 
 ---
 
