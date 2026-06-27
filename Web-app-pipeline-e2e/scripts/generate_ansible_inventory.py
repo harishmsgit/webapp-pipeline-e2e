@@ -16,10 +16,11 @@ def main():
     parser.add_argument("--terraform-output", required=True)
     parser.add_argument("--inventory", required=True)
     parser.add_argument("--remote-user", default="ubuntu")
+    parser.add_argument("--public-ip", default=None, help="Optional override public IP for the management host")
     args = parser.parse_args()
 
     outputs = json.loads(Path(args.terraform_output).read_text(encoding="utf-8"))
-    public_ip = output_value(outputs, "management_ec2_public_ip")
+    public_ip = args.public_ip or output_value(outputs, "management_ec2_public_ip")
     if not public_ip:
         raise SystemExit("Terraform output management_ec2_public_ip is empty; cannot build Ansible inventory.")
 

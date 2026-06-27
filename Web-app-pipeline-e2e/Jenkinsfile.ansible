@@ -100,6 +100,38 @@ pipeline {
       }
     }
 
+    stage('Resolve Management Host') {
+      steps {
+        dir(env.PROJECT_DIR) {
+          sh '''
+            HOST=$(awk '/ansible_host/ {print $2}' "${INVENTORY_FILE}" | cut -d'=' -f2)
+            echo "Inventory resolved IP: ${HOST}"
+            if ! nc -vz -w5 "${HOST}" 22 >/dev/null 2>&1; then
+              echo "Inventory host ${HOST} is not reachable on port 22; resolving current management public IP from AWS..."
+              AWS_PUBLIC_IP=$(aws ec2 describe-instances \
+                --filters "Name=tag:Name,Values=*management-instance" "Name=instance-state-name,Values=running" \
+                --query "Reservations[].Instances[0].PublicIpAddress" \
+                --output text --region ${AWS_REGION})
+              if [ -z "${AWS_PUBLIC_IP}" ] || [ "${AWS_PUBLIC_IP}" = "None" ]; then
+                echo "Failed to resolve a running management instance public IP from AWS."
+                exit 1
+              fi
+              echo "Resolved AWS public IP: ${AWS_PUBLIC_IP}"
+              python3 scripts/generate_ansible_inventory.py \
+                --terraform-output "${TF_OUTPUT_FILE}" \
+                --inventory "${INVENTORY_FILE}" \
+                --remote-user "${REMOTE_USER}" \
+                --public-ip "${AWS_PUBLIC_IP}"
+              echo "Regenerated inventory with AWS fallback:"
+              cat "${INVENTORY_FILE}"
+            else
+              echo "Inventory host ${HOST} is reachable."
+            fi
+          '''
+        }
+      }
+    }
+
     stage('Configure Management EC2') {
       steps {
         dir(env.PROJECT_DIR) {
