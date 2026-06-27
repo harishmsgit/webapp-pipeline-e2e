@@ -88,10 +88,12 @@ pipeline {
       steps {
         dir(env.PROJECT_DIR) {
           sh '''
+            mkdir -p "$(dirname "${INVENTORY_FILE}")"
             python3 scripts/generate_ansible_inventory.py \
               --terraform-output "${TF_OUTPUT_FILE}" \
               --inventory "${INVENTORY_FILE}" \
               --remote-user "${REMOTE_USER}"
+            echo "Generated inventory:" 
             cat "${INVENTORY_FILE}"
           '''
         }
@@ -106,8 +108,11 @@ pipeline {
               . scripts/ensure_ansible.sh
               export ANSIBLE_SSH_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
               export ANSIBLE_REMOTE_USER="${REMOTE_USER}"
+              echo "Using SSH key file: $SSH_KEY_FILE"
+              echo "Using SSH user: ${REMOTE_USER}"
+              echo "Inventory file: ${INVENTORY_FILE}"
               EKS_CLUSTER_NAME=$(python3 -c "import json; print(json.load(open('${TF_OUTPUT_FILE}'))['eks_cluster_name']['value'])")
-              ansible-playbook \
+              ansible-playbook -vvv \
                 -i "${INVENTORY_FILE}" \
                 ansible/playbooks/configure-management.yml \
                 -e "aws_region=${AWS_REGION}" \
@@ -127,7 +132,9 @@ pipeline {
               . scripts/ensure_ansible.sh
               export ANSIBLE_SSH_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
               export ANSIBLE_REMOTE_USER="${REMOTE_USER}"
-              ansible-playbook \
+              echo "Validating SSH target with inventory:"
+              cat "${INVENTORY_FILE}"
+              ansible-playbook -vvv \
                 -i "${INVENTORY_FILE}" \
                 ansible/playbooks/validate-management.yml \
                 -e "ansible_user=${REMOTE_USER}"
