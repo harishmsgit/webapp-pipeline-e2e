@@ -76,10 +76,16 @@ pipeline {
                   -backend-config="use_lockfile=true" \
                   -backend-config="dynamodb_table=${params.LOCK_TABLE}"
                 terraform workspace select ${params.ENVIRONMENT}
+                terraform workspace show
+                terraform state list | tee "${WORKSPACE}/${env.PROJECT_DIR}/terraform/state-list.txt"
                 terraform output -json > "${TF_OUTPUT_FILE}"
               """
             }
           }
+          sh """
+            echo "Terraform workspace: $(cat "${WORKSPACE}/${env.PROJECT_DIR}/terraform/state-list.txt" | sed -n '1p')"
+            echo "Terraform output management_ec2_public_ip: $(python3 -c 'import json; import sys; data=json.load(open("${TF_OUTPUT_FILE}")); print(data.get("management_ec2_public_ip", {}).get("value", "<missing>"))')"
+          """
         }
       }
     }
@@ -102,32 +108,41 @@ pipeline {
 
     stage('Resolve Management Host') {
       steps {
-        dir(env.PROJECT_DIR) {
-          sh '''
-            HOST=$(awk '/ansible_host/ {print $2}' "${INVENTORY_FILE}" | cut -d'=' -f2)
-            echo "Inventory resolved IP: ${HOST}"
-            if ! nc -vz -w5 "${HOST}" 22 >/dev/null 2>&1; then
-              echo "Inventory host ${HOST} is not reachable on port 22; resolving current management public IP from AWS..."
-              AWS_PUBLIC_IP=$(aws ec2 describe-instances \
-                --filters "Name=tag:Name,Values=*management-instance" "Name=instance-state-name,Values=running" \
-                --query "Reservations[].Instances[0].PublicIpAddress" \
-                --output text --region ${AWS_REGION})
-              if [ -z "${AWS_PUBLIC_IP}" ] || [ "${AWS_PUBLIC_IP}" = "None" ]; then
-                echo "Failed to resolve a running management instance public IP from AWS."
-                exit 1
-              fi
-              echo "Resolved AWS public IP: ${AWS_PUBLIC_IP}"
-              python3 scripts/generate_ansible_inventory.py \
-                --terraform-output "${TF_OUTPUT_FILE}" \
-                --inventory "${INVENTORY_FILE}" \
-                --remote-user "${REMOTE_USER}" \
-                --public-ip "${AWS_PUBLIC_IP}"
-              echo "Regenerated inventory with AWS fallback:"
-              cat "${INVENTORY_FILE}"
-            else
-              echo "Inventory host ${HOST} is reachable."
-            fi
-          '''
+        script {
+          def awsCreds = params.AWS_CREDENTIALS_ID?.trim() ?: env.AWS_CREDENTIALS_ID?.trim()
+          if (!awsCreds) {
+            error('AWS_CREDENTIALS_ID must be provided as a build parameter or Jenkins environment variable.')
+          }
+
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: awsCreds]]) {
+            dir(env.PROJECT_DIR) {
+              sh '''
+                HOST=$(awk '/ansible_host/ {print $2}' "${INVENTORY_FILE}" | cut -d'=' -f2)
+                echo "Inventory resolved IP: ${HOST}"
+                if ! nc -vz -w5 "${HOST}" 22 >/dev/null 2>&1; then
+                  echo "Inventory host ${HOST} is not reachable on port 22; resolving current management public IP from AWS..."
+                  AWS_PUBLIC_IP=$(aws ec2 describe-instances \
+                    --filters "Name=tag:Name,Values=*management-instance" "Name=instance-state-name,Values=running" \
+                    --query "Reservations[].Instances[0].PublicIpAddress" \
+                    --output text --region ${AWS_REGION})
+                  if [ -z "${AWS_PUBLIC_IP}" ] || [ "${AWS_PUBLIC_IP}" = "None" ]; then
+                    echo "Failed to resolve a running management instance public IP from AWS."
+                    exit 1
+                  fi
+                  echo "Resolved AWS public IP: ${AWS_PUBLIC_IP}"
+                  python3 scripts/generate_ansible_inventory.py \
+                    --terraform-output "${TF_OUTPUT_FILE}" \
+                    --inventory "${INVENTORY_FILE}" \
+                    --remote-user "${REMOTE_USER}" \
+                    --public-ip "${AWS_PUBLIC_IP}"
+                  echo "Regenerated inventory with AWS fallback:"
+                  cat "${INVENTORY_FILE}"
+                else
+                  echo "Inventory host ${HOST} is reachable."
+                fi
+              '''
+            }
+          }
         }
       }
     }
