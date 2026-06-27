@@ -1,0 +1,15 @@
+# Node.js dependencies
+node_modules/
+
+# Terraform local state
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Logs
+*.log
+
+# IDE files
+.vscode/
+.idea/

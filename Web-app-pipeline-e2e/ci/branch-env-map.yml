@@ -1,0 +1,13 @@
+mappings:
+  main: prod
+  master: prod
+  develop: dev
+  dev: dev
+  development: dev
+  qa: qa
+  staging: qa
+
+# Prefix rules: if a branch starts with the key, map to the value
+prefixes:
+  release: prod
+  hotfix: prod

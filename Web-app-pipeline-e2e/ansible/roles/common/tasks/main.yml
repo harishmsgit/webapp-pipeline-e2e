@@ -1,0 +1,43 @@
+---
+- name: Install base packages on Debian/Ubuntu
+  ansible.builtin.apt:
+    name:
+    - curl
+    - git
+    - unzip
+    - tar
+    - jq
+    - python3
+    - python3-pip
+    - apt-transport-https
+    - ca-certificates
+    - gnupg
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install base packages on RedHat/Amazon Linux
+  ansible.builtin.yum:
+    name:
+    - curl
+    - git
+    - unzip
+    - tar
+    - jq
+    - python3
+    - python3-pip
+    - yum-utils
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Upgrade installed packages on Debian/Ubuntu
+  ansible.builtin.apt:
+    upgrade: safe
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Upgrade installed packages on RedHat/Amazon Linux
+  ansible.builtin.yum:
+    name: "*"
+    state: latest
+  when: ansible_facts['os_family'] == 'RedHat'

@@ -29,6 +29,24 @@ This repository contains a complete, production-ready implementation of **Sprint
 - Ansible configuration management — scheduled for Sprint 3
 - Prometheus/Grafana monitoring — scheduled for Sprint 5
 
+## Sprint 2: Terraform Infrastructure Provisioning
+
+This project now includes Sprint 2 infrastructure automation for AWS with Terraform and Jenkins integration. The new assets automate provisioning of:
+
+- VPC, public subnets, Internet Gateway, and route table
+- EKS cluster and managed node group
+- EC2 management instance and security groups
+- Terraform state storage in AWS S3 with DynamoDB locking
+- Jenkins pipeline support for automated Terraform provisioning
+
+New files for Sprint 2:
+
+- `terraform/` — Terraform configuration for AWS infrastructure
+- `Jenkinsfile.terraform` — Jenkins pipeline definition for Terraform plan/apply
+- `SPRINT2_SETUP_GUIDE.md` — Instructions for Terraform provisioning and Jenkins job setup
+- `doc/jenkins-terraform-job.md` — Detailed Jenkins job creation and Job DSL example
+- Feature branch: `feature/sprint2-terraform`
+
 ## 📂 Directory Structure
 
 ```
@@ -38,11 +56,22 @@ Web-app-pipeline-e2e/
 ├── Dockerfile                       # Docker image build instructions
 ├── docker-compose.yml               # Local testing with Docker Compose
 ├── Jenkinsfile                      # Jenkins CI/CD pipeline definition
+├── Jenkinsfile.terraform            # Jenkins pipeline for Terraform infrastructure provisioning
+├── SPRINT2_SETUP_GUIDE.md           # Sprint 2 Terraform and Jenkins integration guide
 ├── jenkins-ecr-policy.json          # AWS IAM policy for ECR access
 │
 ├── app/
 │   ├── server.js                    # Node.js web application
 │   └── package.json                 # Node.js dependencies
+│
+├── terraform/                      # Terraform modules for AWS VPC, EKS, EC2, and state backend
+│   ├── backend.tf
+│   ├── main.tf
+│   ├── outputs.tf
+│   ├── provider.tf
+│   ├── terraform.tfvars.example
+│   ├── variables.tf
+│   └── versions.tf
 │
 └── doc/
     ├── architecture-sprint1.md      # Architecture design and AWS integration plan
@@ -89,7 +118,7 @@ docker run -p 3000:3000 web-app-sprint1:latest
 
 # Test with Docker Compose
 docker compose up --build
-# Access at http://localhost:5000
+# Access at http://localhost:3000
 ```
 
 ### 2️⃣ AWS Setup (10 minutes)

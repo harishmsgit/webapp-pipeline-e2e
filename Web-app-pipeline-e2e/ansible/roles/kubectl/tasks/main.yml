@@ -1,0 +1,10 @@
+---
+- name: Install kubectl
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version | default('v1.30.0') }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+
+- name: Verify kubectl installation
+  ansible.builtin.command: kubectl version --client=true
+  changed_when: false

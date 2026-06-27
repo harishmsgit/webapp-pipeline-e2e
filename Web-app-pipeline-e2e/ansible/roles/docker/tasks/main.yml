@@ -1,0 +1,26 @@
+---
+- name: Install Docker on Debian/Ubuntu
+  ansible.builtin.apt:
+    name: docker.io
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install Docker on Amazon Linux
+  ansible.builtin.yum:
+    name: docker
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Enable and start Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Add users to docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users | default(['ubuntu']) }}"
