@@ -154,6 +154,7 @@ pipeline {
             sh '''
               . scripts/ensure_ansible.sh
               export ANSIBLE_SSH_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
+              export ANSIBLE_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
               export ANSIBLE_REMOTE_USER="${REMOTE_USER}"
               echo "Using SSH key file: $SSH_KEY_FILE"
               echo "Using SSH user: ${REMOTE_USER}"
@@ -164,7 +165,9 @@ pipeline {
                 ansible/playbooks/configure-management.yml \
                 -e "aws_region=${AWS_REGION}" \
                 -e "eks_cluster_name=${EKS_CLUSTER_NAME}" \
-                -e "ansible_user=${REMOTE_USER}"
+                -e "ansible_user=${REMOTE_USER}" \
+                -e "ansible_ssh_private_key_file=${SSH_KEY_FILE}" \
+                -e "ansible_private_key_file=${SSH_KEY_FILE}"
             '''
           }
         }
@@ -178,13 +181,16 @@ pipeline {
             sh '''
               . scripts/ensure_ansible.sh
               export ANSIBLE_SSH_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
+              export ANSIBLE_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
               export ANSIBLE_REMOTE_USER="${REMOTE_USER}"
               echo "Validating SSH target with inventory:"
               cat "${INVENTORY_FILE}"
               ansible-playbook -vvv \
                 -i "${INVENTORY_FILE}" \
                 ansible/playbooks/validate-management.yml \
-                -e "ansible_user=${REMOTE_USER}"
+                -e "ansible_user=${REMOTE_USER}" \
+                -e "ansible_ssh_private_key_file=${SSH_KEY_FILE}" \
+                -e "ansible_private_key_file=${SSH_KEY_FILE}"
             '''
           }
         }
