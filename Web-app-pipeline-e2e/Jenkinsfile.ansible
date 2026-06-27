@@ -83,8 +83,8 @@ pipeline {
             }
           }
           sh """
-            echo "Terraform workspace: $(cat "${WORKSPACE}/${env.PROJECT_DIR}/terraform/state-list.txt" | sed -n '1p')"
-            echo "Terraform output management_ec2_public_ip: $(python3 -c 'import json; import sys; data=json.load(open("${TF_OUTPUT_FILE}")); print(data.get("management_ec2_public_ip", {}).get("value", "<missing>"))')"
+            echo "Terraform workspace: \$(cat \"${env.WORKSPACE}/${env.PROJECT_DIR}/terraform/state-list.txt\" | sed -n '1p')"
+            echo "Terraform output management_ec2_public_ip: \$(python3 -c 'import json; import sys; data=json.load(open(\"${env.TF_OUTPUT_FILE}\")); print(data.get(\"management_ec2_public_ip\", {}).get(\"value\", \"<missing>\"))')"
           """
         }
       }
