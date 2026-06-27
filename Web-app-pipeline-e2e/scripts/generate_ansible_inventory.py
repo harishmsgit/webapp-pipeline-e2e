@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--terraform-output", required=True)
     parser.add_argument("--inventory", required=True)
-    parser.add_argument("--remote-user", default="ec2-user")
+    parser.add_argument("--remote-user", default="ubuntu")
     args = parser.parse_args()
 
     outputs = json.loads(Path(args.terraform_output).read_text(encoding="utf-8"))

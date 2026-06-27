@@ -22,15 +22,29 @@ The default is `null` to avoid changing existing environments, but SSH-based Ans
 
 ## Jenkins Prerequisites
 
-Install these on the Jenkins agent:
+### Required Jenkins Plugins
+
+**Before running the Ansible pipeline, install these plugins in Jenkins:**
+
+1. **SSH Agent Plugin** (`ssh-agent`)
+   - Required for `sshagent` DSL step in Ansible playbook execution
+   - Install via: Manage Jenkins → Manage Plugins → Available → Search "SSH Agent" → Install
+
+2. **AWS Credentials Plugin** (usually pre-installed)
+   - Binds AWS credentials to the pipeline
+
+### Jenkins Agent Requirements
+
+Install these on the Jenkins agent (machine running the pipeline):
 
 - Terraform
 - Python 3 with outbound HTTPS access so the Ansible pipeline can bootstrap user-local `pip`, `python3-venv`, and `ansible-core`
 - AWS CLI
-- Jenkins `SSH Agent` plugin
-- Jenkins AWS credentials binding plugin
+- Git
 
-The Jenkins agent should either have `python3-venv`/`python3-pip` installed, or support passwordless sudo for package installation. If the agent cannot install packages, pre-install those runtime dependencies before running the pipeline.
+The Jenkins agent should either have `python3-venv`/`python3-pip` pre-installed, or support passwordless sudo for package installation. If the agent cannot install packages, pre-install those runtime dependencies before running the pipeline.
+
+### Jenkins Credentials
 
 Create these Jenkins credentials:
 
@@ -100,7 +114,7 @@ AWS_REGION=ap-south-1
 TF_STATE_BUCKET=webapp-prod-terraform-state
 LOCK_TABLE=webapp-prod-terraform-lock
 SSH_PRIVATE_KEY_CREDENTIALS_ID=prod-management-ec2-ssh-key
-REMOTE_USER=ec2-user
+REMOTE_USER=ubuntu
 RUN_ANSIBLE_AFTER_APPLY=true
 ```
 
@@ -133,7 +147,7 @@ terraform -chdir=terraform output -json > ansible/terraform-outputs.json
 python3 scripts/generate_ansible_inventory.py \
   --terraform-output ansible/terraform-outputs.json \
   --inventory ansible/inventories/generated/hosts.ini \
-  --remote-user ec2-user
+  --remote-user ubuntu
 ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventories/generated/hosts.ini ansible/playbooks/configure-management.yml
 ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook -i ansible/inventories/generated/hosts.ini ansible/playbooks/validate-management.yml
 ```

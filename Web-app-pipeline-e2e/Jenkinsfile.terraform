@@ -11,7 +11,7 @@ pipeline {
     booleanParam(name: 'RUN_ANSIBLE_AFTER_APPLY', defaultValue: true, description: 'Trigger the Ansible configuration job after Terraform apply succeeds')
     string(name: 'ANSIBLE_JOB_NAME', defaultValue: 'webapp-ansible-config', description: 'Jenkins job name that uses Jenkinsfile.ansible')
     string(name: 'SSH_PRIVATE_KEY_CREDENTIALS_ID', defaultValue: 'management-ec2-ssh-key', description: 'SSH private key credential passed to the Ansible job')
-    string(name: 'REMOTE_USER', defaultValue: 'ec2-user', description: 'SSH user passed to the Ansible job')
+    string(name: 'REMOTE_USER', defaultValue: 'ubuntu', description: 'SSH user passed to the Ansible job')
   }
 
   environment {

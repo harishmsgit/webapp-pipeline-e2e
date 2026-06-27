@@ -2,4 +2,5 @@ aws_region: ap-south-1
 eks_cluster_name: webapp-eks-cluster
 kubectl_version: "v1.30.0"
 docker_users:
-  - ec2-user
+- ubuntu
+- ec2-user

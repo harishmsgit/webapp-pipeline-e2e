@@ -457,6 +457,54 @@ docker run -d --name jenkins -p 8090:8080 jenkins/jenkins:lts
 
 ---
 
+### Issue: Python virtual environment bootstrap fails on Debian/Ubuntu
+
+**Error**:
+```
+The virtual environment was not created successfully because ensurepip is not available.
+```
+
+or
+
+```
+/usr/bin/python3: No module named pip
+```
+
+**Solution**:
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-venv python3-pip
+```
+
+If the Jenkins agent uses an externally-managed Python environment, make sure the pipeline agent can install these packages with passwordless sudo or pre-install them on the agent host.
+
+---
+
+### Issue: "No such DSL method 'sshagent' found"
+
+**Error**:
+```
+java.lang.NoSuchMethodError: No such DSL method 'sshagent' found
+```
+
+**Solution**:
+The `sshagent` step requires the **SSH Agent Plugin** for Jenkins. Install it:
+
+```
+1. Jenkins Home Page
+2. Click: "Manage Jenkins" (left sidebar)
+3. Click: "Manage Plugins"
+4. Click: "Available" tab
+5. Search for: "SSH Agent"
+6. Check the box next to "SSH Agent"
+7. Click: "Install without restart"
+8. Wait for installation to complete
+```
+
+After installing, restart your pipeline job.
+
+---
+
 ## Environment Variables Alternative
 
 If you don't want to store credentials in Jenkins UI:
