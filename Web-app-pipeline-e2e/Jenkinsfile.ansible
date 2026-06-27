@@ -101,15 +101,18 @@ pipeline {
     stage('Configure Management EC2') {
       steps {
         dir(env.PROJECT_DIR) {
-          sshagent(credentials: [params.SSH_PRIVATE_KEY_CREDENTIALS_ID]) {
+          withCredentials([sshUserPrivateKey(credentialsId: params.SSH_PRIVATE_KEY_CREDENTIALS_ID, keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USERNAME')]) {
             sh '''
               . scripts/ensure_ansible.sh
+              export ANSIBLE_SSH_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
+              export ANSIBLE_REMOTE_USER="${REMOTE_USER}"
               EKS_CLUSTER_NAME=$(python3 -c "import json; print(json.load(open('${TF_OUTPUT_FILE}'))['eks_cluster_name']['value'])")
               ansible-playbook \
                 -i "${INVENTORY_FILE}" \
                 ansible/playbooks/configure-management.yml \
                 -e "aws_region=${AWS_REGION}" \
-                -e "eks_cluster_name=${EKS_CLUSTER_NAME}"
+                -e "eks_cluster_name=${EKS_CLUSTER_NAME}" \
+                -e "ansible_user=${REMOTE_USER}"
             '''
           }
         }
@@ -119,12 +122,15 @@ pipeline {
     stage('Validate Configuration') {
       steps {
         dir(env.PROJECT_DIR) {
-          sshagent(credentials: [params.SSH_PRIVATE_KEY_CREDENTIALS_ID]) {
+          withCredentials([sshUserPrivateKey(credentialsId: params.SSH_PRIVATE_KEY_CREDENTIALS_ID, keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USERNAME')]) {
             sh '''
               . scripts/ensure_ansible.sh
+              export ANSIBLE_SSH_PRIVATE_KEY_FILE="$SSH_KEY_FILE"
+              export ANSIBLE_REMOTE_USER="${REMOTE_USER}"
               ansible-playbook \
                 -i "${INVENTORY_FILE}" \
-                ansible/playbooks/validate-management.yml
+                ansible/playbooks/validate-management.yml \
+                -e "ansible_user=${REMOTE_USER}"
             '''
           }
         }
