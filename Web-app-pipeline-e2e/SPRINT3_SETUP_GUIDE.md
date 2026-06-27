@@ -26,12 +26,10 @@ The default is `null` to avoid changing existing environments, but SSH-based Ans
 
 **Before running the Ansible pipeline, install these plugins in Jenkins:**
 
-1. **SSH Agent Plugin** (`ssh-agent`)
-   - Required for `sshagent` DSL step in Ansible playbook execution
-   - Install via: Manage Jenkins → Manage Plugins → Available → Search "SSH Agent" → Install
-
-2. **AWS Credentials Plugin** (usually pre-installed)
+1. **AWS Credentials Plugin** (usually pre-installed)
    - Binds AWS credentials to the pipeline
+
+No extra SSH Agent plugin is required for the current pipeline because the Ansible stages use Jenkins' built-in `withCredentials([sshUserPrivateKey(...)])` binding.
 
 ### Jenkins Agent Requirements
 
@@ -46,10 +44,19 @@ The Jenkins agent should either have `python3-venv`/`python3-pip` pre-installed,
 
 ### Jenkins Credentials
 
-Create these Jenkins credentials:
+Create these Jenkins credentials in Jenkins under Manage Jenkins → Manage Credentials:
 
 - `aws-credentials` - AWS credentials or use an EC2 instance profile.
-- `management-ec2-ssh-key` - SSH private key matching `management_key_name`.
+- `management-ec2-ssh-key` - SSH Username with private key credential for the management EC2 instance.
+
+Use these exact values:
+
+- Kind: `SSH Username with private key`
+- ID: `management-ec2-ssh-key`
+- Username: `ubuntu`
+- Private key: contents of the PEM file that matches the EC2 key pair used by the management instance
+
+If Jenkins reports `Could not find credentials entry with ID 'management-ec2-ssh-key'`, the credential has not been created or the job is not using the same credential store/scope.
 
 ## Jobs
 
