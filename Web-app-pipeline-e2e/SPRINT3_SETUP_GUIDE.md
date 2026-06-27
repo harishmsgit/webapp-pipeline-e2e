@@ -46,7 +46,7 @@ The Jenkins agent should either have `python3-venv`/`python3-pip` pre-installed,
 
 Create these Jenkins credentials in Jenkins under Manage Jenkins → Manage Credentials:
 
-- `aws-credentials` - AWS credentials or use an EC2 instance profile.
+- `awsId` - AWS credentials or use an EC2 instance profile.
 - `management-ec2-ssh-key` - SSH Username with private key credential for the management EC2 instance.
 
 Use these exact values:

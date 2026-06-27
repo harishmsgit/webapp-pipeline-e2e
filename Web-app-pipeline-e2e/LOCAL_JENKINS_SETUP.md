@@ -123,7 +123,7 @@ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
    │ Scope:               Global (unrestricted)│
    │ Access Key ID:       AKIA...              │ ← Paste your AWS Access Key
    │ Secret Access Key:   [paste secret]       │ ← Paste your AWS Secret Key
-   │ ID:                  aws-credentials      │ ← This is the reference name
+   │ ID:                  awsId                │ ← This is the reference name
    │ Description:         Jenkins AWS Access   │
    └──────────────────────────────────────────┘
 
@@ -149,7 +149,7 @@ Fill Access Key ID
   ↓
 Fill Secret Access Key
   ↓
-Set ID: aws-credentials
+Set ID: awsId
   ↓
 Click Create
   ↓
@@ -275,12 +275,12 @@ Form to fill:
 │ Scope: Global (unrestricted)                │
 │ Access Key ID: AKIAIOSFODNN7EXAMPLE         │
 │ Secret Access Key: wJalrXUtnFEMI/K7...      │
-│ ID: aws-credentials                         │
+│ ID: awsId                                   │
 │ Description: Jenkins AWS Credentials        │
 └─────────────────────────────────────────────┘
 
 5. Click Create
-6. You should see: "aws-credentials (AWS Credentials)"
+6. You should see: "awsId (AWS Credentials)"
 ```
 
 ---
@@ -380,7 +380,7 @@ Error: No AWS credentials provided
 ```
 1. Check if credentials are added:
    Manage Jenkins → Manage Credentials
-2. Verify credential ID is: aws-credentials
+2. Verify credential ID is: awsId
 3. Restart Jenkins:
    Docker: docker restart jenkins
    Windows: Services → Jenkins → Restart
@@ -531,7 +531,7 @@ Before running pipeline, verify all steps:
 Local Jenkins Setup:
 ✓ Jenkins running on http://localhost:8080
 ✓ Can login with admin credentials
-✓ AWS Credentials added (ID: aws-credentials)
+✓ AWS Credentials added (ID: awsId)
 ✓ GitHub credentials added (if private repo)
 ✓ Pipeline job created: webapp-terraform-pipeline
 ✓ Can access job page
