@@ -23,4 +23,4 @@
     name: "{{ item }}"
     groups: docker
     append: true
-  loop: "{{ docker_users }}"
+  loop: "{{ docker_users | default(['ubuntu']) }}"
