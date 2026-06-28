@@ -104,11 +104,13 @@ pipeline {
           }
           echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
           sh """
-            docker build \
-              --tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} \
-              --tag ${ECR_REPO_NAME}:latest \
-              --build-arg NODE_ENV=production \
-              --file Web-app-pipeline-e2e/app/Dockerfile \
+            docker build \\
+              --tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} \\
+              --tag ${ECR_REPO_NAME}:latest \\
+              --tag ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG} \\
+              --tag ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest \\
+              --build-arg NODE_ENV=production \\
+              --file Web-app-pipeline-e2e/app/Dockerfile \\
               Web-app-pipeline-e2e/app
           """
         }
