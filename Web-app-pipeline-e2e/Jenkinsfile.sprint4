@@ -36,7 +36,7 @@ pipeline {
           checkout scm
           echo "Checked out source"
           // Always set IMAGE_TAG so local builds can tag images even when deployment is disabled
-          env.IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_ID
+          env.IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_NUMBER
           if (params.RUN_DEPLOYMENT) {
             if (!params.AWS_ACCOUNT_ID?.trim()) {
               error('AWS_ACCOUNT_ID is required when RUN_DEPLOYMENT is true.')
