@@ -17,8 +17,10 @@ spec:
     spec:
       containers:
       - name: webapp
-          image: REPLACE_IMAGE
-          failureThreshold: 3
+        image: REPLACE_IMAGE
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
         resources:
           requests:
             cpu: 100m
