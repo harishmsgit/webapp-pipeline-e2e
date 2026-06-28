@@ -81,14 +81,20 @@ pipeline {
 
     stage('Docker Build') {
       steps {
-        sh '''
-          docker build \
-            --tag ${ECR_REPO_NAME}:${IMAGE_TAG} \
-            --tag ${ECR_REPO_NAME}:latest \
-            --build-arg NODE_ENV=production \
-            --file app/Dockerfile \
-            .
-        '''
+        script {
+          if (!env.IMAGE_TAG?.trim()) {
+            env.IMAGE_TAG = env.BUILD_NUMBER ?: "${System.currentTimeMillis()}"
+            echo "Using fallback IMAGE_TAG=${env.IMAGE_TAG}"
+          }
+          sh '''
+            docker build \
+              --tag ${ECR_REPO_NAME}:${IMAGE_TAG} \
+              --tag ${ECR_REPO_NAME}:latest \
+              --build-arg NODE_ENV=production \
+              --file Web-app-pipeline-e2e/app/Dockerfile \
+              Web-app-pipeline-e2e
+          '''
+        }
       }
     }
 
