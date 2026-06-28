@@ -4,6 +4,7 @@ pipeline {
   parameters {
     string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
     string(name: 'AWS_ACCOUNT_ID', defaultValue: '495013583028', description: 'AWS account ID for ECR registry')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'awsId', description: 'Jenkins AWS credentials ID')
     string(name: 'ECR_REPO_NAME', defaultValue: 'web-app-sprint4', description: 'ECR repository name')
     string(name: 'IMAGE_TAG', defaultValue: '', description: 'Docker image tag (defaults to BUILD_ID)')
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'java-spring-eks', description: 'EKS cluster name')
@@ -109,33 +110,48 @@ pipeline {
     }
 
     stage('Login to ECR') {
+      when {
+        expression { return params.RUN_DEPLOYMENT }
+      }
       steps {
-        sh '''
-          aws ecr get-login-password --region ${AWS_REGION} | docker login \
-            --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-        '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          sh '''
+            aws ecr get-login-password --region ${AWS_REGION} | docker login \
+              --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          '''
+        }
       }
     }
 
     stage('Ensure ECR Repo') {
+      when {
+        expression { return params.RUN_DEPLOYMENT }
+      }
       steps {
-        sh '''
-          if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
-            aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
-              --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
-          fi
-        '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          sh '''
+            if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
+              aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
+                --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
+            fi
+          '''
+        }
       }
     }
 
     stage('Push Image') {
+      when {
+        expression { return params.RUN_DEPLOYMENT }
+      }
       steps {
-        sh '''
-          docker tag ${ECR_REPO_NAME}:${IMAGE_TAG} ${IMAGE_URI}
-          docker tag ${ECR_REPO_NAME}:latest ${LATEST_URI}
-          docker push ${IMAGE_URI}
-          docker push ${LATEST_URI}
-        '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          sh '''
+            docker tag ${ECR_REPO_NAME}:${IMAGE_TAG} ${IMAGE_URI}
+            docker tag ${ECR_REPO_NAME}:latest ${LATEST_URI}
+            docker push ${IMAGE_URI}
+            docker push ${LATEST_URI}
+          '''
+        }
       }
     }
 
@@ -144,14 +160,16 @@ pipeline {
         expression { return params.RUN_DEPLOYMENT }
       }
       steps {
-        sh '''
-          aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-          kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          sed 's|REPLACE_IMAGE|${IMAGE_URI}|g' k8s/deployment.yaml | kubectl apply -f -
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/hpa.yaml
-          kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=120s
-        '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          sh '''
+            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+            kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+            sed 's|REPLACE_IMAGE|${IMAGE_URI}|g' k8s/deployment.yaml | kubectl apply -f -
+            kubectl apply -f k8s/service.yaml
+            kubectl apply -f k8s/hpa.yaml
+            kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=120s
+          '''
+        }
       }
     }
 
