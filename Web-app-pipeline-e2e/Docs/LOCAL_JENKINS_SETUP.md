@@ -196,6 +196,20 @@ Click Create
 
 ---
 
+### Seed job notes (Job DSL / Multibranch)
+
+If you plan to use the provided Job DSL seed scripts in `ci/jenkins/` to create jobs automatically, pass the Git credential id to the seed job so the DSL can use it instead of a hard-coded value.
+
+When creating the seed job (Freestyle job → Process Job DSLs), add a String parameter named `GIT_CREDENTIALS_ID` with the credential id you added to Jenkins (for example `github-token` or `github-ssh`). The DSL will prefer this parameter, then fall back to the `GIT_CREDENTIALS_ID` environment variable, then finally a default.
+
+Example (create as a String parameter on the seed job):
+
+```
+GIT_CREDENTIALS_ID = github-token
+```
+
+If you don't set this, the DSL will use the repository's default credential id configured in the scripts.
+
 ## Detailed Steps for Local Jenkins with AWS Credentials
 
 ### Step 1: Create IAM User with AWS Access Keys

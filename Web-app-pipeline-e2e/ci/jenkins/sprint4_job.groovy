@@ -7,12 +7,13 @@ pipelineJob('webapp-sprint4-pipeline') {
       // Disable lightweight checkout to force a full checkout (avoids some revision lookup issues)
       lightweight(false)
       scm {
-        git {
-          remote {
-            url('https://github.com/harishmsgit/webapp-pipeline-e2e.git')
-            // Replace with your SCM credential ID if required
-            credentials('harish-git-PAT')
-          }
+          git {
+            // Prefer seed-job parameter `GIT_CREDENTIALS_ID`, then env var, then fallback
+            def gitCredentialsId = (this.binding?.hasVariable('GIT_CREDENTIALS_ID') ? this.binding.getVariable('GIT_CREDENTIALS_ID') : System.getenv('GIT_CREDENTIALS_ID')) ?: 'harish-git-PAT'
+            remote {
+              url('https://github.com/harishmsgit/webapp-pipeline-e2e.git')
+              credentials(gitCredentialsId)
+            }
           // Use explicit refs/heads to avoid ambiguous branch resolution
           branches('refs/heads/feature/sprint4-EKS-ECR-Multi-Stage')
           // The repository root contains a top-level folder `Web-app-pipeline-e2e` in CI clones,

@@ -7,7 +7,8 @@ Quick seed steps (Job DSL plugin):
 1. Install the **Job DSL** plugin in Jenkins.
 2. Create a new Freestyle job (e.g. `seed-job`).
 3. Add a build step: **Process Job DSLs** → choose **Use the provided DSL script** and paste the contents of `ci/jenkins/sprint4_job.groovy` (or point the seed job at this repository).
-4. Run `seed-job` — it will create `webapp-sprint4-pipeline`.
+4. Optionally add a String parameter named `GIT_CREDENTIALS_ID` to the seed job (value = your Git credential id in Jenkins). The DSL will use that parameter first, then the `GIT_CREDENTIALS_ID` environment variable, then a default.
+5. Run `seed-job` — it will create `webapp-sprint4-pipeline`.
 
 Alternative: use the Jenkins Script Console or CI bootstrap tooling to run the DSL script.
 
