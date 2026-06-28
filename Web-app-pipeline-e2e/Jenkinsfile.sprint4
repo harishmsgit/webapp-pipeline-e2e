@@ -92,8 +92,13 @@ pipeline {
             env.IMAGE_TAG = tag
           }
           sh '''
+            TAG="${IMAGE_TAG}"
+            if [ -z "$TAG" ] || [ "$TAG" = "null" ] || [ "$TAG" = "NULL" ]; then
+              TAG=$(date +%s)
+              echo "Shell fallback TAG=$TAG"
+            fi
             docker build \
-              --tag ${ECR_REPO_NAME}:${IMAGE_TAG} \
+              --tag ${ECR_REPO_NAME}:$TAG \
               --tag ${ECR_REPO_NAME}:latest \
               --build-arg NODE_ENV=production \
               --file Web-app-pipeline-e2e/app/Dockerfile \
