@@ -4,6 +4,8 @@ pipelineJob('webapp-sprint4-pipeline') {
 
   definition {
     cpsScm {
+      // Disable lightweight checkout to force a full checkout (avoids some revision lookup issues)
+      lightweight(false)
       scm {
         git {
           remote {
@@ -11,12 +13,15 @@ pipelineJob('webapp-sprint4-pipeline') {
             // Replace with your SCM credential ID if required
             credentials('harish-git-PAT')
           }
-          // Checkout the feature branch created for Sprint 4
-          branches('*/feature/sprint4-EKS-ECR-Multi-Stage')
+          // Use explicit refs/heads to avoid ambiguous branch resolution
+          branches('refs/heads/feature/sprint4-EKS-ECR-Multi-Stage')
           // The repository root contains a top-level folder `Web-app-pipeline-e2e` in CI clones,
           // ensure the script path matches where the Jenkinsfile is located in the repo.
           scriptPath('Web-app-pipeline-e2e/Jenkinsfile.sprint4')
-          extensions {}
+          extensions {
+            // Check out the branch as a local branch to ensure a ref is available
+            localBranch('feature/sprint4-EKS-ECR-Multi-Stage')
+          }
         }
       }
     }
