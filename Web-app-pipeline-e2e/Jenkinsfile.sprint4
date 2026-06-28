@@ -35,6 +35,8 @@ pipeline {
         script {
           checkout scm
           echo "Checked out source"
+          // Always set IMAGE_TAG so local builds can tag images even when deployment is disabled
+          env.IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_ID
           if (params.RUN_DEPLOYMENT) {
             if (!params.AWS_ACCOUNT_ID?.trim()) {
               error('AWS_ACCOUNT_ID is required when RUN_DEPLOYMENT is true.')
@@ -42,12 +44,12 @@ pipeline {
             if (!params.EKS_CLUSTER_NAME?.trim()) {
               error('EKS_CLUSTER_NAME is required when RUN_DEPLOYMENT is true.')
             }
-            env.IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_ID
             env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
             env.LATEST_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
             echo "Using image: ${env.IMAGE_URI}"
           } else {
             echo "Deployment is disabled (RUN_DEPLOYMENT=false); skipping AWS/ECR parameter validation."
+            echo "Local image tag will be: ${env.ECR_REPO_NAME}:${env.IMAGE_TAG}"
           }
         }
       }
