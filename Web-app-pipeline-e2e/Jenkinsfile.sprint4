@@ -82,9 +82,13 @@ pipeline {
     stage('Docker Build') {
       steps {
         script {
-          if (!env.IMAGE_TAG?.trim()) {
+          def tag = env.IMAGE_TAG?.trim()
+          if (!tag || tag == 'null' || tag == 'NULL') {
             env.IMAGE_TAG = env.BUILD_NUMBER ?: "${System.currentTimeMillis()}"
             echo "Using fallback IMAGE_TAG=${env.IMAGE_TAG}"
+          } else {
+            echo "Using IMAGE_TAG=${tag}"
+            env.IMAGE_TAG = tag
           }
           sh '''
             docker build \
