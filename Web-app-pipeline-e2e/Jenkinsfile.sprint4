@@ -37,7 +37,14 @@ pipeline {
           checkout scm
           echo "Checked out source"
           // Always set IMAGE_TAG so local builds can tag images even when deployment is disabled
-          env.IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_NUMBER
+          def computedTag = params.IMAGE_TAG?.trim()
+          if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
+            computedTag = env.BUILD_NUMBER?.trim()
+          }
+          if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
+            computedTag = java.util.UUID.randomUUID().toString()
+          }
+          env.IMAGE_TAG = computedTag
           if (params.RUN_DEPLOYMENT) {
             if (!params.AWS_ACCOUNT_ID?.trim()) {
               error('AWS_ACCOUNT_ID is required when RUN_DEPLOYMENT is true.')
@@ -85,19 +92,15 @@ pipeline {
         script {
           def tag = env.IMAGE_TAG?.trim()
           if (!tag || tag == 'null' || tag == 'NULL') {
-            def fallback = (env.BUILD_NUMBER && env.BUILD_NUMBER.toString() != 'null') ? env.BUILD_NUMBER.toString() : java.util.UUID.randomUUID().toString()
-            env.IMAGE_TAG = fallback
-            echo "Using fallback IMAGE_TAG=${env.IMAGE_TAG}"
-          } else {
-            echo "Using IMAGE_TAG=${tag}"
-            env.IMAGE_TAG = tag
+            tag = env.BUILD_NUMBER?.trim()
           }
+          if (!tag || tag == 'null' || tag == 'NULL') {
+            tag = java.util.UUID.randomUUID().toString()
+          }
+          env.IMAGE_TAG = tag
+          echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
           sh '''
             TAG="${IMAGE_TAG}"
-            if [ -z "$TAG" ] || [ "$TAG" = "null" ] || [ "$TAG" = "NULL" ]; then
-              TAG=$(date +%s)
-              echo "Shell fallback TAG=$TAG"
-            fi
             docker build \
               --tag ${ECR_REPO_NAME}:$TAG \
               --tag ${ECR_REPO_NAME}:latest \
