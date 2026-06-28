@@ -84,7 +84,8 @@ pipeline {
         script {
           def tag = env.IMAGE_TAG?.trim()
           if (!tag || tag == 'null' || tag == 'NULL') {
-            env.IMAGE_TAG = env.BUILD_NUMBER ?: "${System.currentTimeMillis()}"
+            def fallback = (env.BUILD_NUMBER && env.BUILD_NUMBER.toString() != 'null') ? env.BUILD_NUMBER.toString() : "${System.currentTimeMillis()}"
+            env.IMAGE_TAG = fallback
             echo "Using fallback IMAGE_TAG=${env.IMAGE_TAG}"
           } else {
             echo "Using IMAGE_TAG=${tag}"
