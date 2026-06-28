@@ -98,9 +98,17 @@ pipeline {
             tag = java.util.UUID.randomUUID().toString()
           }
           env.IMAGE_TAG = tag
+          if (params.RUN_DEPLOYMENT) {
+            env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
+            env.LATEST_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
+          }
           echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
           sh '''
             TAG="${IMAGE_TAG}"
+            if [ -z "$TAG" ] || [ "$TAG" = "null" ] || [ "$TAG" = "NULL" ]; then
+              TAG=$(date +%s)
+              echo "Shell fallback TAG=$TAG"
+            fi
             docker build \
               --tag ${ECR_REPO_NAME}:$TAG \
               --tag ${ECR_REPO_NAME}:latest \
