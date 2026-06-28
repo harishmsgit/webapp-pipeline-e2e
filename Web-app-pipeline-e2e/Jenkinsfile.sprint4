@@ -174,10 +174,12 @@ pipeline {
           echo "Pushing image ${imageUri} and ${latestUri}"
         }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          // Use the local variables for substitution (avoid env containing literal 'null')
+          echo "ENV IMAGE_URI=${env.IMAGE_URI} LATEST_URI=${env.LATEST_URI}"
           sh """
             # Push the fully-qualified ECR image names created during build
-            docker push ${env.IMAGE_URI}
-            docker push ${env.LATEST_URI}
+            docker push ${imageUri}
+            docker push ${latestUri}
           """
         }
       }
