@@ -39,10 +39,10 @@ pipeline {
           // Always set IMAGE_TAG so local builds can tag images even when deployment is disabled
           def computedTag = params.IMAGE_TAG?.trim()
           if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
-            computedTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString())?.toString()?.trim()
+            computedTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
           }
           if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
-            computedTag = java.util.UUID.randomUUID().toString()
+            computedTag = "${System.currentTimeMillis()}"
           }
           env.IMAGE_TAG = computedTag
           if (params.RUN_DEPLOYMENT) {
@@ -92,10 +92,10 @@ pipeline {
         script {
           def tag = env.IMAGE_TAG?.trim()
           if (!tag || tag == 'null' || tag == 'NULL') {
-            tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString())?.toString()?.trim()
+            tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
           }
           if (!tag || tag == 'null' || tag == 'NULL') {
-            tag = java.util.UUID.randomUUID().toString()
+            tag = "${System.currentTimeMillis()}"
           }
           env.IMAGE_TAG = tag
           if (params.RUN_DEPLOYMENT) {
@@ -105,13 +105,13 @@ pipeline {
           echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
           sh """
             docker build \\
-              --tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} \\
               --tag ${ECR_REPO_NAME}:latest \\
-              --tag ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG} \\
               --tag ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest \\
               --build-arg NODE_ENV=production \\
               --file Web-app-pipeline-e2e/app/Dockerfile \\
               Web-app-pipeline-e2e/app
+            docker tag ${ECR_REPO_NAME}:latest ${ECR_REPO_NAME}:${tag}
+            docker tag ${ECR_REPO_NAME}:latest ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${tag}
           """
         }
       }
@@ -155,10 +155,10 @@ pipeline {
         script {
           def imageTag = env.IMAGE_TAG?.trim()
           if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
-            imageTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString())?.toString()?.trim()
+            imageTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
           }
           if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
-            imageTag = java.util.UUID.randomUUID().toString()
+            imageTag = "${System.currentTimeMillis()}"
           }
           env.IMAGE_TAG = imageTag
           def imageUri = env.IMAGE_URI?.trim()
