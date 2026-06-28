@@ -150,6 +150,27 @@ pipeline {
         expression { return params.RUN_DEPLOYMENT }
       }
       steps {
+        script {
+          def imageTag = env.IMAGE_TAG?.trim()
+          if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
+            imageTag = env.BUILD_NUMBER?.trim()
+          }
+          if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
+            imageTag = java.util.UUID.randomUUID().toString()
+          }
+          env.IMAGE_TAG = imageTag
+          def imageUri = env.IMAGE_URI?.trim()
+          def latestUri = env.LATEST_URI?.trim()
+          if (!imageUri || imageUri == 'null' || imageUri == 'NULL') {
+            imageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${imageTag}"
+          }
+          if (!latestUri || latestUri == 'null' || latestUri == 'NULL') {
+            latestUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
+          }
+          env.IMAGE_URI = imageUri
+          env.LATEST_URI = latestUri
+          echo "Pushing image ${imageUri} and ${latestUri}"
+        }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           sh """
             docker tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} ${env.IMAGE_URI}
