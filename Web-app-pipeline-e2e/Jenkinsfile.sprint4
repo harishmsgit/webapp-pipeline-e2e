@@ -102,7 +102,7 @@ pipeline {
               --tag ${ECR_REPO_NAME}:latest \
               --build-arg NODE_ENV=production \
               --file app/Dockerfile \
-              app
+              Web-app-pipeline-e2e/app
           '''
         }
       }
