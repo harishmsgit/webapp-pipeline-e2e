@@ -174,22 +174,24 @@ pipeline {
           echo "Pushing image ${imageUri} and ${latestUri}"
         }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          // Validate image URIs and show local images for debugging
-          echo "ENV IMAGE_URI=${env.IMAGE_URI} LATEST_URI=${env.LATEST_URI}"
+          // Inject Groovy-computed URIs into the shell and use shell vars to push
+          echo "Groovy imageUri=${imageUri} latestUri=${latestUri}"
           sh """
+            IMAGE_URI='${imageUri}'
+            LATEST_URI='${latestUri}'
             set -eu
             echo "DEBUG: docker images for ${ECR_REPO_NAME}:"
             docker images | grep ${ECR_REPO_NAME} || true
-            if [ -z "${imageUri}" ] || [ "${imageUri}" = "null" ]; then
-              echo "ERROR: imageUri is empty or 'null' (value='${imageUri}'). Aborting push."
+            if [ -z "\"\${IMAGE_URI}\"" ] || [ "\${IMAGE_URI}" = "null" ]; then
+              echo "ERROR: IMAGE_URI is empty or 'null' (value='\${IMAGE_URI}'). Aborting push."
               exit 2
             fi
-            if [ -z "${latestUri}" ] || [ "${latestUri}" = "null" ]; then
-              echo "ERROR: latestUri is empty or 'null' (value='${latestUri}'). Aborting push."
+            if [ -z "\"\${LATEST_URI}\"" ] || [ "\${LATEST_URI}" = "null" ]; then
+              echo "ERROR: LATEST_URI is empty or 'null' (value='\${LATEST_URI}'). Aborting push."
               exit 2
             fi
-            docker push ${imageUri}
-            docker push ${latestUri}
+            docker push "\${IMAGE_URI}"
+            docker push "\${LATEST_URI}"
           """
         }
       }
