@@ -174,13 +174,23 @@ pipeline {
           echo "Pushing image ${imageUri} and ${latestUri}"
         }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          // Use the local variables for substitution (avoid env containing literal 'null')
+          // Validate image URIs and show local images for debugging
           echo "ENV IMAGE_URI=${env.IMAGE_URI} LATEST_URI=${env.LATEST_URI}"
-          sh """
-            # Push the fully-qualified ECR image names created during build
-            docker push ${imageUri}
-            docker push ${latestUri}
-          """
+          sh '''
+            set -euo pipefail
+            echo "DEBUG: docker images for ${ECR_REPO_NAME}:"
+            docker images | grep ${ECR_REPO_NAME} || true
+            if [ -z "${IMAGE_URI}" ] || [ "${IMAGE_URI}" = "null" ]; then
+              echo "ERROR: IMAGE_URI is empty or 'null' (value='${IMAGE_URI}'). Aborting push."
+              exit 2
+            fi
+            if [ -z "${LATEST_URI}" ] || [ "${LATEST_URI}" = "null" ]; then
+              echo "ERROR: LATEST_URI is empty or 'null' (value='${LATEST_URI}'). Aborting push."
+              exit 2
+            fi
+            docker push "${IMAGE_URI}"
+            docker push "${LATEST_URI}"
+          '''
         }
       }
     }
