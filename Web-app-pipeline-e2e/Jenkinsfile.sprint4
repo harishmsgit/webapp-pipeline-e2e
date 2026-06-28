@@ -39,7 +39,7 @@ pipeline {
           // Always set IMAGE_TAG so local builds can tag images even when deployment is disabled
           def computedTag = params.IMAGE_TAG?.trim()
           if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
-            computedTag = env.BUILD_NUMBER?.trim()
+            computedTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString())?.toString()?.trim()
           }
           if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
             computedTag = java.util.UUID.randomUUID().toString()
@@ -92,7 +92,7 @@ pipeline {
         script {
           def tag = env.IMAGE_TAG?.trim()
           if (!tag || tag == 'null' || tag == 'NULL') {
-            tag = env.BUILD_NUMBER?.trim()
+            tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString())?.toString()?.trim()
           }
           if (!tag || tag == 'null' || tag == 'NULL') {
             tag = java.util.UUID.randomUUID().toString()
@@ -155,7 +155,7 @@ pipeline {
         script {
           def imageTag = env.IMAGE_TAG?.trim()
           if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
-            imageTag = env.BUILD_NUMBER?.trim()
+            imageTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString())?.toString()?.trim()
           }
           if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
             imageTag = java.util.UUID.randomUUID().toString()
@@ -172,27 +172,27 @@ pipeline {
           env.IMAGE_URI = imageUri
           env.LATEST_URI = latestUri
           echo "Pushing image ${imageUri} and ${latestUri}"
-        }
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          // Inject Groovy-computed URIs into the shell and use shell vars to push
-          echo "Groovy imageUri=${imageUri} latestUri=${latestUri}"
-          sh """
-            IMAGE_URI='${imageUri}'
-            LATEST_URI='${latestUri}'
-            set -eu
-            echo "DEBUG: docker images for ${ECR_REPO_NAME}:"
-            docker images | grep ${ECR_REPO_NAME} || true
-            if [ -z "\"\${IMAGE_URI}\"" ] || [ "\${IMAGE_URI}" = "null" ]; then
-              echo "ERROR: IMAGE_URI is empty or 'null' (value='\${IMAGE_URI}'). Aborting push."
-              exit 2
-            fi
-            if [ -z "\"\${LATEST_URI}\"" ] || [ "\${LATEST_URI}" = "null" ]; then
-              echo "ERROR: LATEST_URI is empty or 'null' (value='\${LATEST_URI}'). Aborting push."
-              exit 2
-            fi
-            docker push "\${IMAGE_URI}"
-            docker push "\${LATEST_URI}"
-          """
+
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+            echo "Groovy imageUri=${imageUri} latestUri=${latestUri}"
+            sh """
+              IMAGE_URI='${imageUri}'
+              LATEST_URI='${latestUri}'
+              set -eu
+              echo "DEBUG: docker images for ${ECR_REPO_NAME}:"
+              docker images | grep ${ECR_REPO_NAME} || true
+              if [ -z "\${IMAGE_URI}" ] || [ "\${IMAGE_URI}" = "null" ]; then
+                echo "ERROR: IMAGE_URI is empty or 'null' (value='\${IMAGE_URI}'). Aborting push."
+                exit 2
+              fi
+              if [ -z "\${LATEST_URI}" ] || [ "\${LATEST_URI}" = "null" ]; then
+                echo "ERROR: LATEST_URI is empty or 'null' (value='\${LATEST_URI}'). Aborting push."
+                exit 2
+              fi
+              docker push "\${IMAGE_URI}"
+              docker push "\${LATEST_URI}"
+            """
+          }
         }
       }
     }
