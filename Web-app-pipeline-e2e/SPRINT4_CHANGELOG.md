@@ -124,7 +124,7 @@ Build, tag, push (replace variables):
 ```bash
 # local example
 export AWS_REGION=ap-south-1
-export AWS_ACCOUNT_ID=123456789012
+export AWS_ACCOUNT_ID=495013583028
 export ECR_REPO_NAME=web-app-sprint4
 export IMAGE_TAG=localtest
 

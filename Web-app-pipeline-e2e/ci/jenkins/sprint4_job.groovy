@@ -9,7 +9,7 @@ pipelineJob('webapp-sprint4-pipeline') {
           remote {
             url('https://github.com/harishmsgit/webapp-pipeline-e2e.git')
             // Replace with your SCM credential ID if required
-            credentials('github-credentials')
+            credentials('harish-git-PAT')
           }
           // Checkout the feature branch created for Sprint 4
           branches('*/feature/sprint4-EKS-ECR-Multi-Stage')
