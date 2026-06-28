@@ -47,6 +47,44 @@ New files for Sprint 2:
 - `doc/jenkins-terraform-job.md` — Detailed Jenkins job creation and Job DSL example
 - Feature branch: `feature/sprint2-terraform`
 
+## Sprint 4: CI/CD Deployment to EKS
+
+Sprint 4 adds full application delivery from source to Kubernetes on AWS EKS. The new pipeline builds the Docker image, pushes it to Amazon ECR, and deploys the app into EKS with readiness/liveness probes and autoscaling.
+
+New files for Sprint 4:
+
+- `Jenkinsfile.sprint4` — Jenkins pipeline for application build, test, Docker/ECR push, and EKS deployment
+- `app/Dockerfile` — application container build instructions
+- `app/test.js` — lightweight smoke test for the Node.js app
+- `app/.dockerignore` — Docker ignore rules for the app image
+- `k8s/namespace.yaml` — Kubernetes namespace manifest
+- `k8s/deployment.yaml` — Kubernetes Deployment with health checks
+- `k8s/service.yaml` — Kubernetes Service for external access
+- `k8s/hpa.yaml` — Kubernetes HorizontalPodAutoscaler for CPU-based scaling
+
+### Sprint 4 Deployment Notes
+
+- The `Jenkinsfile.sprint4` pipeline expects a Jenkins agent with `docker`, `aws`, and `kubectl` installed.
+- The pipeline builds the image in `app/`, pushes it to ECR, and then deploys the Kubernetes manifests to the target EKS cluster.
+- The manifest `k8s/deployment.yaml` contains a placeholder image value that is replaced at deploy time with the pushed ECR image URI.
+
+### Jenkins Parameters for `Jenkinsfile.sprint4`
+
+- `AWS_REGION` — AWS region to use (default: `ap-south-1`)
+- `AWS_ACCOUNT_ID` — required AWS account ID for the ECR repository
+- `ECR_REPO_NAME` — ECR repository name (default: `web-app-sprint4`)
+- `IMAGE_TAG` — optional tag; defaults to Jenkins `BUILD_ID`
+- `EKS_CLUSTER_NAME` — required EKS cluster name
+- `K8S_NAMESPACE` — Kubernetes namespace to deploy into (default: `webapp`)
+- `RUN_DEPLOYMENT` — whether to deploy after image push (default: `true`)
+
+### Quick Sprint 4 Run
+
+1. Create a Jenkins pipeline job using `Jenkinsfile.sprint4` from SCM.
+2. Provide `AWS_ACCOUNT_ID` and `EKS_CLUSTER_NAME` in the job parameters.
+3. Run the job to build, test, push to ECR, and deploy to Kubernetes.
+4. Verify the deployment with `kubectl get all -n webapp` and `kubectl get hpa -n webapp`.
+
 ## 📂 Directory Structure
 
 ```

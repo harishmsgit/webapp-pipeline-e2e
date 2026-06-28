@@ -1,0 +1,149 @@
+pipeline {
+  agent any
+
+  parameters {
+    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
+    string(name: 'AWS_ACCOUNT_ID', defaultValue: '', description: 'AWS account ID for ECR registry')
+    string(name: 'ECR_REPO_NAME', defaultValue: 'web-app-sprint4', description: 'ECR repository name')
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Docker image tag (defaults to BUILD_ID)')
+    string(name: 'EKS_CLUSTER_NAME', defaultValue: '', description: 'EKS cluster name')
+    string(name: 'K8S_NAMESPACE', defaultValue: 'webapp', description: 'Kubernetes namespace')
+    booleanParam(name: 'RUN_DEPLOYMENT', defaultValue: true, description: 'Deploy manifests to EKS after build')
+  }
+
+  environment {
+    AWS_REGION = "${params.AWS_REGION}"
+    AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
+    ECR_REPO_NAME = "${params.ECR_REPO_NAME}"
+    IMAGE_TAG = ""
+    IMAGE_URI = ""
+    LATEST_URI = ""
+    K8S_NAMESPACE = "${params.K8S_NAMESPACE}"
+    EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
+  }
+
+  options {
+    skipDefaultCheckout()
+    timestamps()
+    timeout(time: 45, unit: 'MINUTES')
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        script {
+          checkout scm
+          echo "Checked out source"
+          if (!params.AWS_ACCOUNT_ID?.trim()) {
+            error('AWS_ACCOUNT_ID is required.')
+          }
+          if (!params.EKS_CLUSTER_NAME?.trim()) {
+            error('EKS_CLUSTER_NAME is required for deployment.')
+          }
+          env.IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_ID
+          env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
+          env.LATEST_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
+          echo "Using image: ${env.IMAGE_URI}"
+        }
+      }
+    }
+
+    stage('Build') {
+      steps {
+        dir('app') {
+          sh 'npm install'
+        }
+      }
+    }
+
+    stage('Test') {
+      steps {
+        dir('app') {
+          sh 'npm test'
+        }
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        sh '''
+          docker build \
+            --tag ${ECR_REPO_NAME}:${IMAGE_TAG} \
+            --tag ${ECR_REPO_NAME}:latest \
+            --build-arg NODE_ENV=production \
+            --file app/Dockerfile \
+            .
+        '''
+      }
+    }
+
+    stage('Login to ECR') {
+      steps {
+        sh '''
+          aws ecr get-login-password --region ${AWS_REGION} | docker login \
+            --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+        '''
+      }
+    }
+
+    stage('Ensure ECR Repo') {
+      steps {
+        sh '''
+          if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
+            aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
+              --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
+          fi
+        '''
+      }
+    }
+
+    stage('Push Image') {
+      steps {
+        sh '''
+          docker tag ${ECR_REPO_NAME}:${IMAGE_TAG} ${IMAGE_URI}
+          docker tag ${ECR_REPO_NAME}:latest ${LATEST_URI}
+          docker push ${IMAGE_URI}
+          docker push ${LATEST_URI}
+        '''
+      }
+    }
+
+    stage('Deploy to EKS') {
+      when {
+        expression { return params.RUN_DEPLOYMENT }
+      }
+      steps {
+        sh '''
+          aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+          kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          sed 's|REPLACE_IMAGE|${IMAGE_URI}|g' k8s/deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=120s
+        '''
+      }
+    }
+
+    stage('Post-Deployment Verification') {
+      when {
+        expression { return params.RUN_DEPLOYMENT }
+      }
+      steps {
+        sh '''
+          kubectl get all -n ${K8S_NAMESPACE}
+          kubectl get hpa -n ${K8S_NAMESPACE}
+        '''
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Sprint 4 pipeline completed: image pushed to ${IMAGE_URI} and deployment applied to EKS"
+    }
+    failure {
+      echo "Sprint 4 pipeline failed. Check build, ECR push, or EKS deployment logs."
+    }
+  }
+}
