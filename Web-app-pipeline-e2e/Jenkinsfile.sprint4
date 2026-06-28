@@ -103,19 +103,14 @@ pipeline {
             env.LATEST_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
           }
           echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
-          sh '''
-            TAG="${IMAGE_TAG}"
-            if [ -z "$TAG" ] || [ "$TAG" = "null" ] || [ "$TAG" = "NULL" ]; then
-              TAG=$(date +%s)
-              echo "Shell fallback TAG=$TAG"
-            fi
+          sh """
             docker build \
-              --tag ${ECR_REPO_NAME}:$TAG \
+              --tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} \
               --tag ${ECR_REPO_NAME}:latest \
               --build-arg NODE_ENV=production \
               --file Web-app-pipeline-e2e/app/Dockerfile \
               Web-app-pipeline-e2e/app
-          '''
+          """
         }
       }
     }
@@ -156,12 +151,12 @@ pipeline {
       }
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          sh '''
-            docker tag ${ECR_REPO_NAME}:${IMAGE_TAG} ${IMAGE_URI}
-            docker tag ${ECR_REPO_NAME}:latest ${LATEST_URI}
-            docker push ${IMAGE_URI}
-            docker push ${LATEST_URI}
-          '''
+          sh """
+            docker tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} ${env.IMAGE_URI}
+            docker tag ${ECR_REPO_NAME}:latest ${env.LATEST_URI}
+            docker push ${env.IMAGE_URI}
+            docker push ${env.LATEST_URI}
+          """
         }
       }
     }
