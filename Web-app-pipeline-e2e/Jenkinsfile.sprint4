@@ -84,7 +84,7 @@ pipeline {
         script {
           def tag = env.IMAGE_TAG?.trim()
           if (!tag || tag == 'null' || tag == 'NULL') {
-            def fallback = (env.BUILD_NUMBER && env.BUILD_NUMBER.toString() != 'null') ? env.BUILD_NUMBER.toString() : "${System.currentTimeMillis()}"
+            def fallback = (env.BUILD_NUMBER && env.BUILD_NUMBER.toString() != 'null') ? env.BUILD_NUMBER.toString() : java.util.UUID.randomUUID().toString()
             env.IMAGE_TAG = fallback
             echo "Using fallback IMAGE_TAG=${env.IMAGE_TAG}"
           } else {
