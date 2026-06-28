@@ -24,4 +24,6 @@ Use the Jenkins UI or:
 curl -X POST JENKINS_URL/job/webapp-sprint4-pipeline/build --user <user:api_token>
 ```
 
+If `RUN_DEPLOYMENT` is set to `false`, the pipeline will skip AWS/ECR/EKS deployment stages and does not require `AWS_ACCOUNT_ID` or `EKS_CLUSTER_NAME`.
+
 Notes: `Jenkinsfile.sprint4` is already in the repository root; the job uses that file. If you want me to attempt creating the job directly on your Jenkins server, grant access and credentials and I can run the seed step remotely.

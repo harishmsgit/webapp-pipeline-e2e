@@ -14,10 +14,9 @@ pipelineJob('webapp-sprint4-pipeline') {
               url('https://github.com/harishmsgit/webapp-pipeline-e2e.git')
               credentials(gitCredentialsId)
             }
-          // Use explicit refs/heads to avoid ambiguous branch resolution
-          branches('refs/heads/feature/sprint4-EKS-ECR-Multi-Stage')
-          // The repository root contains a top-level folder `Web-app-pipeline-e2e` in CI clones,
-          // ensure the script path matches where the Jenkinsfile is located in the repo.
+          // Use explicit branch spec to select the correct feature branch
+          branches('*/feature/sprint4-EKS-ECR-Multi-Stage')
+          // The Jenkinsfile is stored in the nested checkout directory created by this repo.
           scriptPath('Web-app-pipeline-e2e/Jenkinsfile.sprint4')
           extensions {
             // Check out the branch as a local branch to ensure a ref is available

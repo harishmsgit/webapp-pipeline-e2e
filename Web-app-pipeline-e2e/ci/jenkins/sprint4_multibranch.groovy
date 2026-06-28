@@ -20,7 +20,7 @@ multibranchPipelineJob('webapp-sprint4-multibranch') {
   factory {
       workflowBranchProjectFactory {
       // Use the repository-relative path to the pipeline script
-      scriptPath('Jenkinsfile.sprint4')
+      scriptPath('Web-app-pipeline-e2e/Jenkinsfile.sprint4')
     }
   }
 
