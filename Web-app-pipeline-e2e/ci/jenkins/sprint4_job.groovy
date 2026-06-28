@@ -13,7 +13,9 @@ pipelineJob('webapp-sprint4-pipeline') {
           }
           // Checkout the feature branch created for Sprint 4
           branches('*/feature/sprint4-EKS-ECR-Multi-Stage')
-          scriptPath('Jenkinsfile.sprint4')
+          // The repository root contains a top-level folder `Web-app-pipeline-e2e` in CI clones,
+          // ensure the script path matches where the Jenkinsfile is located in the repo.
+          scriptPath('Web-app-pipeline-e2e/Jenkinsfile.sprint4')
           extensions {}
         }
       }
