@@ -175,8 +175,7 @@ pipeline {
         }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           sh """
-            docker tag ${ECR_REPO_NAME}:${env.IMAGE_TAG} ${env.IMAGE_URI}
-            docker tag ${ECR_REPO_NAME}:latest ${env.LATEST_URI}
+            # Push the fully-qualified ECR image names created during build
             docker push ${env.IMAGE_URI}
             docker push ${env.LATEST_URI}
           """
