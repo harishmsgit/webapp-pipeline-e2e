@@ -57,7 +57,7 @@ pipeline {
       steps {
         script {
           docker.image('node:18').inside {
-            dir('app') {
+            dir('Web-app-pipeline-e2e/app') {
               sh 'npm install'
             }
           }
@@ -69,7 +69,7 @@ pipeline {
       steps {
         script {
           docker.image('node:18').inside {
-            dir('app') {
+            dir('Web-app-pipeline-e2e/app') {
               sh 'npm test'
             }
           }
