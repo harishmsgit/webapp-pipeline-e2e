@@ -205,6 +205,13 @@ pipeline {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           dir('Web-app-pipeline-e2e') {
             sh '''
+              export PATH="$HOME/bin:$PATH"
+              mkdir -p "$HOME/bin"
+              if ! command -v kubectl >/dev/null 2>&1; then
+                curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o "$HOME/bin/kubectl"
+                chmod +x "$HOME/bin/kubectl"
+              fi
+              kubectl version --client --short || true
               aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
               kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
               sed 's|REPLACE_IMAGE|${IMAGE_URI}|g' k8s/deployment.yaml | kubectl apply -f -
