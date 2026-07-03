@@ -216,6 +216,13 @@ pipeline {
         expression { return params.RUN_DEPLOYMENT }
       }
       steps {
+        script {
+          def deployImageUri = env.IMAGE_URI?.trim()
+          if (!deployImageUri || deployImageUri == 'null' || deployImageUri == 'NULL') {
+            deployImageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
+          }
+          env.IMAGE_URI = deployImageUri
+        }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           dir('Web-app-pipeline-e2e') {
             sh """
