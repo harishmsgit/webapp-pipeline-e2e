@@ -218,28 +218,28 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           dir('Web-app-pipeline-e2e') {
-            sh '''
-              export PATH="$HOME/bin:$PATH"
-              mkdir -p "$HOME/bin"
+            sh """
+              export PATH=\"$HOME/bin:$PATH\"
+              mkdir -p \"$HOME/bin\"
               if ! command -v kubectl >/dev/null 2>&1; then
-                curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o "$HOME/bin/kubectl"
-                chmod +x "$HOME/bin/kubectl"
+                curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o \"$HOME/bin/kubectl\"
+                chmod +x \"$HOME/bin/kubectl\"
               fi
-              IMAGE_URI=''' + env.IMAGE_URI + '''
+              IMAGE_URI='${env.IMAGE_URI}'
               kubectl version --client || true
               aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
               kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-              sed "s|REPLACE_IMAGE|${IMAGE_URI}|g" k8s/deployment.yaml | kubectl apply -f -
+              sed \"s|REPLACE_IMAGE|${IMAGE_URI}|g\" k8s/deployment.yaml | kubectl apply -f -
               kubectl apply -f k8s/service.yaml
               kubectl apply -f k8s/hpa.yaml
               kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s || {
-                echo "Rollout timed out; showing pod details for debugging"
+                echo \"Rollout timed out; showing pod details for debugging\"
                 kubectl get pods -n ${K8S_NAMESPACE} -o wide || true
                 kubectl describe deployment webapp -n ${K8S_NAMESPACE} || true
                 kubectl describe pods -n ${K8S_NAMESPACE} -l app=webapp || true
                 exit 1
               }
-            '''
+            """
           }
         }
       }
