@@ -6,68 +6,53 @@ pipeline {
     string(name: 'AWS_ACCOUNT_ID', defaultValue: '495013583028', description: 'AWS account ID for ECR registry')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'awsId', description: 'Jenkins AWS credentials ID')
     string(name: 'ECR_REPO_NAME', defaultValue: 'web-app-sprint4', description: 'ECR repository name')
-    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Docker image tag (defaults to BUILD_ID)')
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Docker image tag; defaults to BUILD_NUMBER')
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'java-spring-eks', description: 'EKS cluster name')
     string(name: 'K8S_NAMESPACE', defaultValue: 'webapp', description: 'Kubernetes namespace')
-    booleanParam(name: 'RUN_DEPLOYMENT', defaultValue: true, description: 'Deploy manifests to EKS after build')
+    booleanParam(name: 'RUN_DEPLOYMENT', defaultValue: true, description: 'Deploy to EKS after build')
+  }
+
+  options {
+    skipDefaultCheckout()
+    disableConcurrentBuilds()
+    timestamps()
+    timeout(time: 45, unit: 'MINUTES')
   }
 
   environment {
     AWS_REGION = "${params.AWS_REGION}"
     AWS_ACCOUNT_ID = "${params.AWS_ACCOUNT_ID}"
     ECR_REPO_NAME = "${params.ECR_REPO_NAME}"
+    EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
+    K8S_NAMESPACE = "${params.K8S_NAMESPACE}"
     IMAGE_TAG = ""
     IMAGE_URI = ""
-    LATEST_URI = ""
-    K8S_NAMESPACE = "${params.K8S_NAMESPACE}"
-    EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
-  }
-
-  options {
-    skipDefaultCheckout()
-    timestamps()
-    timeout(time: 45, unit: 'MINUTES')
-    disableConcurrentBuilds()
   }
 
   stages {
-    stage('Checkout') {
+    stage('Checkout & Tag') {
       steps {
+        checkout scm
         script {
-          checkout scm
-          echo "Checked out source"
-          // Always set IMAGE_TAG so local builds can tag images even when deployment is disabled
-          def computedTag = params.IMAGE_TAG?.trim()
-          if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
-            computedTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
+          def tag = params.IMAGE_TAG?.trim()
+          if (!tag || tag == 'null' || tag == 'NULL') {
+            tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
           }
-          if (!computedTag || computedTag == 'null' || computedTag == 'NULL') {
-            computedTag = "${System.currentTimeMillis()}"
+          if (!tag) {
+            tag = "${System.currentTimeMillis()}"
           }
-          env.IMAGE_TAG = computedTag
-          if (params.RUN_DEPLOYMENT) {
-            if (!params.AWS_ACCOUNT_ID?.trim()) {
-              error('AWS_ACCOUNT_ID is required when RUN_DEPLOYMENT is true.')
-            }
-            if (!params.EKS_CLUSTER_NAME?.trim()) {
-              error('EKS_CLUSTER_NAME is required when RUN_DEPLOYMENT is true.')
-            }
-            env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
-            env.LATEST_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
-            echo "Using image: ${env.IMAGE_URI}"
-          } else {
-            echo "Deployment is disabled (RUN_DEPLOYMENT=false); skipping AWS/ECR parameter validation."
-            echo "Local image tag will be: ${env.ECR_REPO_NAME}:${env.IMAGE_TAG}"
-          }
+          env.IMAGE_TAG = tag
+          env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${tag}"
+          echo "Image URI: ${env.IMAGE_URI}"
         }
       }
     }
 
     stage('Build') {
       steps {
-        script {
-          docker.image('node:18').inside {
-            dir('Web-app-pipeline-e2e/app') {
+        dir('Web-app-pipeline-e2e/app') {
+          script {
+            docker.image('node:18').inside {
               sh 'npm install'
             }
           }
@@ -77,9 +62,9 @@ pipeline {
 
     stage('Test') {
       steps {
-        script {
-          docker.image('node:18').inside {
-            dir('Web-app-pipeline-e2e/app') {
+        dir('Web-app-pipeline-e2e/app') {
+          script {
+            docker.image('node:18').inside {
               sh 'npm test'
             }
           }
@@ -87,51 +72,21 @@ pipeline {
       }
     }
 
-    stage('Docker Build') {
+    stage('Build Docker Image') {
       steps {
-        script {
-          def tag = env.IMAGE_TAG?.trim()
-          if (!tag || tag == 'null' || tag == 'NULL') {
-            tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
-          }
-          if (!tag || tag == 'null' || tag == 'NULL') {
-            tag = "${System.currentTimeMillis()}"
-          }
-          env.IMAGE_TAG = tag
-          if (params.RUN_DEPLOYMENT) {
-            env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
-            env.LATEST_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
-          }
-          echo "Using IMAGE_TAG=${env.IMAGE_TAG}"
+        dir('Web-app-pipeline-e2e') {
           sh """
-            docker build \\
-              --tag ${ECR_REPO_NAME}:latest \\
-              --tag ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest \\
-              --build-arg NODE_ENV=production \\
-              --file Web-app-pipeline-e2e/app/Dockerfile \\
-              Web-app-pipeline-e2e/app
-            docker tag ${ECR_REPO_NAME}:latest ${ECR_REPO_NAME}:${tag}
-            docker tag ${ECR_REPO_NAME}:latest ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${tag}
+            docker build \
+              --build-arg NODE_ENV=production \
+              --tag ${env.IMAGE_URI} \
+              --file app/Dockerfile \
+              app
           """
         }
       }
     }
 
-    stage('Login to ECR') {
-      when {
-        expression { return params.RUN_DEPLOYMENT }
-      }
-      steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          sh '''
-            aws ecr get-login-password --region ${AWS_REGION} | docker login \
-              --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-          '''
-        }
-      }
-    }
-
-    stage('Ensure ECR Repo') {
+    stage('Push to ECR') {
       when {
         expression { return params.RUN_DEPLOYMENT }
       }
@@ -139,74 +94,14 @@ pipeline {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           sh '''
             set -e
-            if aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
-              echo "ECR repository ${ECR_REPO_NAME} already exists; continuing"
-            else
-              if ! aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
-                --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true >/tmp/ecr-create.log 2>&1; then
-                if grep -q "RepositoryAlreadyExistsException" /tmp/ecr-create.log; then
-                  echo "ECR repository ${ECR_REPO_NAME} already exists; continuing"
-                else
-                  cat /tmp/ecr-create.log
-                  exit 1
-                fi
-              fi
+            aws ecr get-login-password --region ${AWS_REGION} | docker login \
+              --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+            if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
+              aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
+                --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
             fi
+            docker push ${IMAGE_URI}
           '''
-        }
-      }
-    }
-
-    stage('Push Image') {
-      when {
-        expression { return params.RUN_DEPLOYMENT }
-      }
-      steps {
-        script {
-          def imageTag = env.IMAGE_TAG?.trim()
-          if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
-            imageTag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
-          }
-          if (!imageTag || imageTag == 'null' || imageTag == 'NULL') {
-            imageTag = "${System.currentTimeMillis()}"
-          }
-          env.IMAGE_TAG = imageTag
-          def imageUri = env.IMAGE_URI?.trim()
-          def latestUri = env.LATEST_URI?.trim()
-          if (!imageUri || imageUri == 'null' || imageUri == 'NULL') {
-            imageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${imageTag}"
-          }
-          if (!latestUri || latestUri == 'null' || latestUri == 'NULL') {
-            latestUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
-          }
-          env.IMAGE_URI = imageUri
-          env.LATEST_URI = latestUri
-          echo "Pushing image ${imageUri} and ${latestUri}"
-
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-            echo "Groovy imageUri=${imageUri} latestUri=${latestUri}"
-            sh """
-              IMAGE_URI='${imageUri}'
-              LATEST_URI='${latestUri}'
-              set -eu
-              echo "DEBUG: docker images for ${ECR_REPO_NAME}:"
-              docker images | grep ${ECR_REPO_NAME} || true
-              if [ -z "\${IMAGE_URI}" ] || [ "\${IMAGE_URI}" = "null" ]; then
-                echo "ERROR: IMAGE_URI is empty or 'null' (value='\${IMAGE_URI}'). Aborting push."
-                exit 2
-              fi
-              if [ -z "\${LATEST_URI}" ] || [ "\${LATEST_URI}" = "null" ]; then
-                echo "ERROR: LATEST_URI is empty or 'null' (value='\${LATEST_URI}'). Aborting push."
-                exit 2
-              fi
-              docker push "\${IMAGE_URI}"
-              if aws ecr describe-images --repository-name "${ECR_REPO_NAME}" --region "${AWS_REGION}" --image-ids imageTag=latest >/dev/null 2>&1; then
-                echo "ECR tag latest already exists; skipping overwrite because repository tags are immutable."
-              else
-                docker push "\${LATEST_URI}"
-              fi
-            """
-          }
         }
       }
     }
@@ -216,43 +111,30 @@ pipeline {
         expression { return params.RUN_DEPLOYMENT }
       }
       steps {
-        script {
-          def deployImageUri = env.IMAGE_URI?.trim()
-          if (!deployImageUri || deployImageUri == 'null' || deployImageUri == 'NULL') {
-            deployImageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.IMAGE_TAG}"
-          }
-          env.IMAGE_URI = deployImageUri
-        }
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           dir('Web-app-pipeline-e2e') {
             sh """
+              set -e
               export PATH=\"$HOME/bin:$PATH\"
               mkdir -p \"$HOME/bin\"
               if ! command -v kubectl >/dev/null 2>&1; then
                 curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o \"$HOME/bin/kubectl\"
                 chmod +x \"$HOME/bin/kubectl\"
               fi
-              export IMAGE_URI='${env.IMAGE_URI}'
-              kubectl version --client || true
-              aws eks update-kubeconfig --region ${params.AWS_REGION} --name ${params.EKS_CLUSTER_NAME}
-              kubectl create namespace ${params.K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+              echo \"Deploying image ${env.IMAGE_URI}\"
+              aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+              kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
               sed \"s|REPLACE_IMAGE|${env.IMAGE_URI}|g\" k8s/deployment.yaml | kubectl apply -f -
               kubectl apply -f k8s/service.yaml
               kubectl apply -f k8s/hpa.yaml
-              kubectl rollout status deployment/webapp -n ${params.K8S_NAMESPACE} --timeout=300s || {
-                echo \"Rollout timed out; showing pod details for debugging\"
-                kubectl get pods -n ${params.K8S_NAMESPACE} -o wide || true
-                kubectl describe deployment webapp -n ${params.K8S_NAMESPACE} || true
-                kubectl describe pods -n ${params.K8S_NAMESPACE} -l app=webapp || true
-                exit 1
-              }
+              kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
             """
           }
         }
       }
     }
 
-    stage('Post-Deployment Verification') {
+    stage('Verify Deployment') {
       when {
         expression { return params.RUN_DEPLOYMENT }
       }
@@ -267,10 +149,10 @@ pipeline {
 
   post {
     success {
-      echo "Sprint 4 pipeline completed: image pushed to ${IMAGE_URI} and deployment applied to EKS"
+      echo "Pipeline succeeded. Image deployed: ${IMAGE_URI}"
     }
     failure {
-      echo "Sprint 4 pipeline failed. Check build, ECR push, or EKS deployment logs."
+      echo "Pipeline failed. Review logs for details."
     }
   }
 }
