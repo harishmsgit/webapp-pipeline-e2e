@@ -138,9 +138,19 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           sh '''
-            if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
-              aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
-                --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
+            set -e
+            if aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
+              echo "ECR repository ${ECR_REPO_NAME} already exists; continuing"
+            else
+              if ! aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
+                --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true >/tmp/ecr-create.log 2>&1; then
+                if grep -q "RepositoryAlreadyExistsException" /tmp/ecr-create.log; then
+                  echo "ECR repository ${ECR_REPO_NAME} already exists; continuing"
+                else
+                  cat /tmp/ecr-create.log
+                  exit 1
+                fi
+              fi
             fi
           '''
         }
