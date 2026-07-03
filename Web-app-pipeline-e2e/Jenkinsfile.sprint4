@@ -232,11 +232,11 @@ pipeline {
                 curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o \"$HOME/bin/kubectl\"
                 chmod +x \"$HOME/bin/kubectl\"
               fi
-              IMAGE_URI='${env.IMAGE_URI}'
+              export IMAGE_URI='${deployImageUri}'
               kubectl version --client || true
               aws eks update-kubeconfig --region ${params.AWS_REGION} --name ${params.EKS_CLUSTER_NAME}
               kubectl create namespace ${params.K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-              sed \"s|REPLACE_IMAGE|${IMAGE_URI}|g\" k8s/deployment.yaml | kubectl apply -f -
+              sed \"s|REPLACE_IMAGE|${deployImageUri}|g\" k8s/deployment.yaml | kubectl apply -f -
               kubectl apply -f k8s/service.yaml
               kubectl apply -f k8s/hpa.yaml
               kubectl rollout status deployment/webapp -n ${params.K8S_NAMESPACE} --timeout=300s || {
