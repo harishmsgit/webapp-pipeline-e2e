@@ -92,7 +92,7 @@ pipeline {
       }
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          sh '''
+          sh """
             set -e
             aws ecr get-login-password --region ${AWS_REGION} | docker login \
               --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
@@ -100,8 +100,8 @@ pipeline {
               aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
                 --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
             fi
-            docker push ${IMAGE_URI}
-          '''
+            docker push ${env.IMAGE_URI}
+          """
         }
       }
     }
