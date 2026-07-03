@@ -7,6 +7,9 @@ metadata:
     app: webapp
 spec:
   replicas: 1
+  progressDeadlineSeconds: 600
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: webapp
@@ -15,6 +18,7 @@ spec:
       labels:
         app: webapp
     spec:
+      terminationGracePeriodSeconds: 10
       containers:
       - name: webapp
         image: REPLACE_IMAGE
