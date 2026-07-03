@@ -200,7 +200,11 @@ pipeline {
                 exit 2
               fi
               docker push "\${IMAGE_URI}"
-              docker push "\${LATEST_URI}"
+              if aws ecr describe-images --repository-name "${ECR_REPO_NAME}" --region "${AWS_REGION}" --image-ids imageTag=latest >/dev/null 2>&1; then
+                echo "ECR tag latest already exists; skipping overwrite because repository tags are immutable."
+              else
+                docker push "\${LATEST_URI}"
+              fi
             """
           }
         }
