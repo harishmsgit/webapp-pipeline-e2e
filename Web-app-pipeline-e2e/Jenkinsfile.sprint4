@@ -48,14 +48,23 @@ pipeline {
 
           def tag = params.IMAGE_TAG?.trim()
           if (!tag || tag.equalsIgnoreCase('null')) {
-            tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
+            def buildNumber = env.BUILD_NUMBER?.trim()
+            def currentBuildNumber = currentBuild?.number?.toString()
+            def buildId = env.BUILD_ID?.trim()
+
+            echo "BUILD_NUMBER=${buildNumber}"
+            echo "currentBuild.number=${currentBuildNumber}"
+            echo "BUILD_ID=${buildId}"
+
+            tag = buildNumber ?: currentBuildNumber ?: buildId
           }
-          if (!tag) {
+          if (!tag || tag.equalsIgnoreCase('null')) {
             tag = "${System.currentTimeMillis()}"
           }
 
-          env.IMAGE_TAG = tag
+          env.IMAGE_TAG = "${tag}"
           env.IMAGE_URI = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${tag}"
+          echo "IMAGE_TAG=${env.IMAGE_TAG}"
           echo "Image URI: ${env.IMAGE_URI}"
         }
       }
@@ -110,6 +119,12 @@ pipeline {
             def awsRegion = env.AWS_REGION?.trim()
             def ecrRepoName = env.ECR_REPO_NAME?.trim()
             def imageTag = env.IMAGE_TAG?.trim()
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = params.IMAGE_TAG?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = env.BUILD_NUMBER?.trim() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim()
+            }
 
             echo "AWS_ACCOUNT_ID=${awsAccountId}"
             echo "AWS_REGION=${awsRegion}"
