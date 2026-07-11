@@ -116,19 +116,12 @@ pipeline {
           }
           def imageUri = env.IMAGE_URI?.trim()
           def imageTag = env.IMAGE_TAG?.trim()
-          if (!imageUri || imageUri.equalsIgnoreCase('null')) {
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = params.IMAGE_TAG?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = env.BUILD_NUMBER?.trim() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim()
-            }
-            imageUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO_NAME}:${imageTag}"
+          if (!imageUri || imageUri.equalsIgnoreCase('null') || !imageTag || imageTag.equalsIgnoreCase('null')) {
+            error('IMAGE_URI or IMAGE_TAG is not set. Ensure Checkout & Tag stage computed the image values.')
           }
           echo "Using repository root: ${repoRoot}"
           echo "IMAGE_TAG=${imageTag}"
-          echo "IMAGE_URI=${env.IMAGE_URI}"
-          echo "Building Docker image: ${imageUri}"
+          echo "IMAGE_URI=${imageUri}"
           dir(repoRoot) {
             sh """
               docker build \
@@ -155,26 +148,15 @@ pipeline {
             def awsRegion = env.AWS_REGION?.trim()
             def ecrRepoName = env.ECR_REPO_NAME?.trim()
             def imageTag = env.IMAGE_TAG?.trim()
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = params.IMAGE_TAG?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = env.BUILD_NUMBER?.trim() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim()
+            def imageUri = env.IMAGE_URI?.trim()
+            if (!imageTag || imageTag.equalsIgnoreCase('null') || !imageUri || imageUri.equalsIgnoreCase('null')) {
+              error('IMAGE_TAG or IMAGE_URI is missing. Ensure Checkout & Tag stage computed the image values.')
             }
 
             echo "AWS_ACCOUNT_ID=${awsAccountId}"
             echo "AWS_REGION=${awsRegion}"
             echo "ECR_REPO_NAME=${ecrRepoName}"
             echo "IMAGE_TAG=${imageTag}"
-
-            if (!awsAccountId || awsAccountId.equalsIgnoreCase('null') ||
-                !awsRegion || awsRegion.equalsIgnoreCase('null') ||
-                !ecrRepoName || ecrRepoName.equalsIgnoreCase('null') ||
-                !imageTag || imageTag.equalsIgnoreCase('null')) {
-              error('Invalid AWS/ECR parameter values: AWS_ACCOUNT_ID, AWS_REGION, ECR_REPO_NAME, or IMAGE_TAG is missing.')
-            }
-
-            def imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
             echo "ECR push target: ${imageUri}"
 
             sh """
@@ -207,23 +189,33 @@ pipeline {
       }
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          dir('.') {
-            sh """
-              set -e
-              export PATH=\"$HOME/bin:$PATH\"
-              mkdir -p \"$HOME/bin\"
-              if ! command -v kubectl >/dev/null 2>&1; then
-                curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o \"$HOME/bin/kubectl\"
-                chmod +x \"$HOME/bin/kubectl\"
-              fi
-              echo \"Deploying image ${env.IMAGE_URI}\"
-              aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-              kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-              sed \"s|REPLACE_IMAGE|${env.IMAGE_URI}|g\" k8s/deployment.yaml | kubectl apply -f -
-              kubectl apply -f k8s/service.yaml
-              kubectl apply -f k8s/hpa.yaml
-              kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
-            """
+          script {
+            def imageUri = env.IMAGE_URI?.trim()
+            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+              def imageTag = env.IMAGE_TAG?.trim()
+              if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+                error('IMAGE_TAG is missing. Ensure Checkout & Tag stage computed the image values.')
+              }
+              imageUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO_NAME}:${imageTag}"
+            }
+            echo "Deploying image ${imageUri}"
+            dir('.') {
+              sh """
+                set -e
+                export PATH=\"$HOME/bin:$PATH\"
+                mkdir -p \"$HOME/bin\"
+                if ! command -v kubectl >/dev/null 2>&1; then
+                  curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o \"$HOME/bin/kubectl\"
+                  chmod +x \"$HOME/bin/kubectl\"
+                fi
+                aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                sed \"s|REPLACE_IMAGE|${imageUri}|g\" k8s/deployment.yaml | kubectl apply -f -
+                kubectl apply -f k8s/service.yaml
+                kubectl apply -f k8s/hpa.yaml
+                kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
+              """
+            }
           }
         }
       }
