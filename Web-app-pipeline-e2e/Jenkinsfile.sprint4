@@ -107,21 +107,36 @@ pipeline {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           sh """
             set -e
-            echo "ECR push target: ${env.IMAGE_URI}"
-            if [ -z "${env.IMAGE_URI}" ] || [ "${env.IMAGE_URI}" = "null" ]; then
-              echo "ERROR: Invalid IMAGE_URI, check AWS_ACCOUNT_ID/AWS_REGION/ECR_REPO_NAME/IMAGE_TAG values."
+            echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}"
+            echo "AWS_REGION=${AWS_REGION}"
+            echo "ECR_REPO_NAME=${ECR_REPO_NAME}"
+            echo "IMAGE_TAG=${IMAGE_TAG}"
+
+            if [ -z "${AWS_ACCOUNT_ID}" ] || [ "${AWS_ACCOUNT_ID}" = "null" ] || \
+               [ -z "${AWS_REGION}" ] || [ "${AWS_REGION}" = "null" ] || \
+               [ -z "${ECR_REPO_NAME}" ] || [ "${ECR_REPO_NAME}" = "null" ] || \
+               [ -z "${IMAGE_TAG}" ] || [ "${IMAGE_TAG}" = "null" ]; then
+              echo "ERROR: Invalid AWS/ECR parameter values."
+              echo "AWS_ACCOUNT_ID='${AWS_ACCOUNT_ID}'"
+              echo "AWS_REGION='${AWS_REGION}'"
+              echo "ECR_REPO_NAME='${ECR_REPO_NAME}'"
+              echo "IMAGE_TAG='${IMAGE_TAG}'"
               exit 1
             fi
+
+            IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
+            echo "ECR push target: ${IMAGE_URI}"
+
             aws ecr get-login-password --region ${AWS_REGION} | docker login \
               --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
             if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
               aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
                 --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
             fi
-            if aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${env.IMAGE_TAG} --region ${AWS_REGION} >/dev/null 2>&1; then
-              echo "Image ${env.IMAGE_URI} already exists in ECR; skipping push."
+            if aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${IMAGE_TAG} --region ${AWS_REGION} >/dev/null 2>&1; then
+              echo "Image ${IMAGE_URI} already exists in ECR; skipping push."
             else
-              docker push ${env.IMAGE_URI}
+              docker push ${IMAGE_URI}
             fi
           """
         }
