@@ -114,18 +114,22 @@ pipeline {
           if (!repoRoot) {
             error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
           }
+          def imageUri = env.IMAGE_URI?.trim()
+          if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+            imageUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO_NAME}:${env.IMAGE_TAG}"
+          }
           echo "Using repository root: ${repoRoot}"
+          echo "Building Docker image: ${imageUri}"
           dir(repoRoot) {
             sh """
-              cd app
               docker build \
                 --build-arg NODE_ENV=production \
-                --tag ${env.IMAGE_URI} \
-                -f Dockerfile \
-                .
+                --tag '${imageUri}' \
+                --file app/Dockerfile \
+                app
             """
-            sh "docker image inspect ${env.IMAGE_URI} >/dev/null 2>&1"
-            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${env.IMAGE_URI}' || true"
+            sh "docker image inspect '${imageUri}' >/dev/null 2>&1"
+            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${imageUri}' || true"
           }
         }
       }
