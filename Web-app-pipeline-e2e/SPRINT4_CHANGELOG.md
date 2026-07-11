@@ -26,6 +26,7 @@ Implement a fully automated CI/CD pipeline that:
 - AWS credentials available in Jenkins (via credentials binding or instance role)
 - EKS cluster already provisioned and accessible (e.g., via Terraform in `terraform/`)
 - ECR repository will be created by the pipeline if missing
+- The ECR push stage now checks whether the requested image tag already exists and skips pushing if the tag is already present.
 
 ## Run/Validation Steps
 1. Create a Jenkins pipeline job that uses `Jenkinsfile.sprint4` from this repo's branch `feature/sprint4-EKS-ECR-Multi-Stage`.
