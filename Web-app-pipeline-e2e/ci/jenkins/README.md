@@ -16,6 +16,7 @@ Credentials and prerequisites:
 - Replace `github-credentials` inside the DSL with your SCM credential id if required.
 - Create Jenkins credentials for AWS (access key / secret) and assign the ID used by your `Jenkinsfile.sprint4` (e.g., `aws-creds`).
 - Ensure the Jenkins agent used by the pipeline has `docker`, `aws` CLI v2, and `kubectl` available and has network access to ECR/EKS.
+- Grant the AWS credential principal ECR permissions for login and push. See `jenkins-ecr-policy.json` for the required actions such as `ecr:GetAuthorizationToken`, `ecr:PutImage`, and layer upload actions.
 
 Triggering the job:
 Use the Jenkins UI or:

@@ -66,6 +66,7 @@ New files for Sprint 4:
 
 - The `Jenkinsfile.sprint4` pipeline expects a Jenkins agent with `docker`, `aws`, and `kubectl` installed.
 - The pipeline builds the image in `app/`, pushes it to ECR, and then deploys the Kubernetes manifests to the target EKS cluster.
+- If the requested image tag already exists in ECR, the pipeline skips the push step and continues to deploy the existing image.
 - The manifest `k8s/deployment.yaml` contains a placeholder image value that is replaced at deploy time with the pushed ECR image URI.
 
 ### Jenkins Parameters for `Jenkinsfile.sprint4`
@@ -265,6 +266,7 @@ curl http://localhost:3000
 ## 🔐 Security Considerations
 
 - **IAM Roles**: Use EC2 instance IAM roles (preferred) instead of stored credentials
+- **ECR Permissions**: The Jenkins credentials must allow ECR login and push operations. See `jenkins-ecr-policy.json` for the required actions.
 - **Security Groups**: Restrict SSH (22) and Jenkins UI (8080) to your IP
 - **Git Credentials**: Use personal access tokens or SSH keys, not passwords
 - **ECR Scanning**: Enable image scanning on push to detect vulnerabilities
@@ -349,3 +351,12 @@ This project is provided as-is for educational and enterprise use.
 **Maintainer**: DevOps Team
 
 **Start with [SPRINT1_SETUP_GUIDE.md](SPRINT1_SETUP_GUIDE.md) for complete setup instructions!**
+
+
+
+
+aws ecr describe-repositories --repository-names web-app-sprint4 --region ap-south-1
+
+aws ecr get-login-password --region ap-south-1 \
+| docker login --username BtnHurryPot@26 --password-stdin 495013583028.dkr.ecr.ap-south-1.amazonaws.com
+
