@@ -34,15 +34,28 @@ pipeline {
       steps {
         checkout scm
         script {
+          def awsAccountId = params.AWS_ACCOUNT_ID?.trim()
+          def awsRegion = params.AWS_REGION?.trim()
+          def ecrRepoName = params.ECR_REPO_NAME?.trim()
+
+          echo "AWS_ACCOUNT_ID=${awsAccountId}"
+          echo "AWS_REGION=${awsRegion}"
+          echo "ECR_REPO_NAME=${ecrRepoName}"
+
+          if (!awsAccountId || awsAccountId.equalsIgnoreCase('null') || !awsRegion || awsRegion.equalsIgnoreCase('null') || !ecrRepoName || ecrRepoName.equalsIgnoreCase('null')) {
+            error('Missing required ECR parameters: AWS_ACCOUNT_ID, AWS_REGION, or ECR_REPO_NAME. Check your Jenkins job parameter values.')
+          }
+
           def tag = params.IMAGE_TAG?.trim()
-          if (!tag || tag == 'null' || tag == 'NULL') {
+          if (!tag || tag.equalsIgnoreCase('null')) {
             tag = (env.BUILD_NUMBER ?: currentBuild?.number?.toString() ?: env.BUILD_ID)?.toString()?.trim()
           }
           if (!tag) {
             tag = "${System.currentTimeMillis()}"
           }
+
           env.IMAGE_TAG = tag
-          env.IMAGE_URI = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${tag}"
+          env.IMAGE_URI = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${tag}"
           echo "Image URI: ${env.IMAGE_URI}"
         }
       }
