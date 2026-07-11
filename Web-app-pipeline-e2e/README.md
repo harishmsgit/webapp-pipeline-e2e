@@ -360,3 +360,24 @@ aws ecr describe-repositories --repository-names web-app-sprint4 --region ap-sou
 aws ecr get-login-password --region ap-south-1 \
 | docker login --username BtnHurryPot@26 --password-stdin 495013583028.dkr.ecr.ap-south-1.amazonaws.com
 
+
+
+
+
+aws iam create-policy --policy-name jenkins-ecr-policy --policy-document file://jenkins-ecr-policy.json
+
+
+aws iam attach-role-policy \
+  --role-name jenkins-sprint1-ec2-role \
+  --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/jenkins-ecr-policy
+
+
+  aws iam attach-user-policy \
+  --user-name jenkins-user \
+  --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/jenkins-ecr-policy
+
+
+  aws iam put-role-policy \
+  --role-name jenkins-sprint1-ec2-role \
+  --policy-name JenkinsECRPushPolicy \
+  --policy-document file://jenkins-ecr-policy.json

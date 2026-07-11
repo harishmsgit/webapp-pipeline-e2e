@@ -115,10 +115,19 @@ pipeline {
             error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
           }
           def imageUri = env.IMAGE_URI?.trim()
+          def imageTag = env.IMAGE_TAG?.trim()
           if (!imageUri || imageUri.equalsIgnoreCase('null')) {
-            imageUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO_NAME}:${env.IMAGE_TAG}"
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = params.IMAGE_TAG?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = env.BUILD_NUMBER?.trim() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim()
+            }
+            imageUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO_NAME}:${imageTag}"
           }
           echo "Using repository root: ${repoRoot}"
+          echo "IMAGE_TAG=${imageTag}"
+          echo "IMAGE_URI=${env.IMAGE_URI}"
           echo "Building Docker image: ${imageUri}"
           dir(repoRoot) {
             sh """
