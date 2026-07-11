@@ -105,40 +105,42 @@ pipeline {
       }
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          sh """
-            set -e
-            echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}"
-            echo "AWS_REGION=${AWS_REGION}"
-            echo "ECR_REPO_NAME=${ECR_REPO_NAME}"
-            echo "IMAGE_TAG=${IMAGE_TAG}"
+          script {
+            def awsAccountId = env.AWS_ACCOUNT_ID?.trim()
+            def awsRegion = env.AWS_REGION?.trim()
+            def ecrRepoName = env.ECR_REPO_NAME?.trim()
+            def imageTag = env.IMAGE_TAG?.trim()
 
-            if [ -z "${AWS_ACCOUNT_ID}" ] || [ "${AWS_ACCOUNT_ID}" = "null" ] || \
-               [ -z "${AWS_REGION}" ] || [ "${AWS_REGION}" = "null" ] || \
-               [ -z "${ECR_REPO_NAME}" ] || [ "${ECR_REPO_NAME}" = "null" ] || \
-               [ -z "${IMAGE_TAG}" ] || [ "${IMAGE_TAG}" = "null" ]; then
-              echo "ERROR: Invalid AWS/ECR parameter values."
-              echo "AWS_ACCOUNT_ID='${AWS_ACCOUNT_ID}'"
-              echo "AWS_REGION='${AWS_REGION}'"
-              echo "ECR_REPO_NAME='${ECR_REPO_NAME}'"
-              echo "IMAGE_TAG='${IMAGE_TAG}'"
-              exit 1
-            fi
+            echo "AWS_ACCOUNT_ID=${awsAccountId}"
+            echo "AWS_REGION=${awsRegion}"
+            echo "ECR_REPO_NAME=${ecrRepoName}"
+            echo "IMAGE_TAG=${imageTag}"
 
-            IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:${IMAGE_TAG}"
-            echo "ECR push target: ${IMAGE_URI}"
+            if (!awsAccountId || awsAccountId.equalsIgnoreCase('null') ||
+                !awsRegion || awsRegion.equalsIgnoreCase('null') ||
+                !ecrRepoName || ecrRepoName.equalsIgnoreCase('null') ||
+                !imageTag || imageTag.equalsIgnoreCase('null')) {
+              error('Invalid AWS/ECR parameter values: AWS_ACCOUNT_ID, AWS_REGION, ECR_REPO_NAME, or IMAGE_TAG is missing.')
+            }
 
-            aws ecr get-login-password --region ${AWS_REGION} | docker login \
-              --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-            if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
-              aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
-                --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
-            fi
-            if aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${IMAGE_TAG} --region ${AWS_REGION} >/dev/null 2>&1; then
-              echo "Image ${IMAGE_URI} already exists in ECR; skipping push."
-            else
-              docker push ${IMAGE_URI}
-            fi
-          """
+            def imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
+            echo "ECR push target: ${imageUri}"
+
+            sh """
+              set -e
+              aws ecr get-login-password --region ${awsRegion} | docker login \
+                --username AWS --password-stdin ${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com
+              if ! aws ecr describe-repositories --repository-names ${ecrRepoName} --region ${awsRegion} >/dev/null 2>&1; then
+                aws ecr create-repository --repository-name ${ecrRepoName} --region ${awsRegion} \
+                  --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
+              fi
+              if aws ecr describe-images --repository-name ${ecrRepoName} --image-ids imageTag=${imageTag} --region ${awsRegion} >/dev/null 2>&1; then
+                echo "Image ${imageUri} already exists in ECR; skipping push."
+              else
+                docker push ${imageUri}
+              fi
+            """
+          }
         }
       }
     }
