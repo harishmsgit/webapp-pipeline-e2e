@@ -72,10 +72,16 @@ pipeline {
 
     stage('Build') {
       steps {
-        dir('app') {
-          script {
+        script {
+          def appDir = fileExists('app/package.json') ? 'app' :
+                       (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
+          if (!appDir) {
+            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+          }
+          echo "Using app directory: ${appDir}"
+          dir(appDir) {
             docker.image('node:18').inside {
-              sh 'npm install'
+              sh 'pwd && ls -la && npm install'
             }
           }
         }
@@ -84,10 +90,16 @@ pipeline {
 
     stage('Test') {
       steps {
-        dir('app') {
-          script {
+        script {
+          def appDir = fileExists('app/package.json') ? 'app' :
+                       (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
+          if (!appDir) {
+            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+          }
+          echo "Using app directory: ${appDir}"
+          dir(appDir) {
             docker.image('node:18').inside {
-              sh 'npm test'
+              sh 'pwd && ls -la && npm test'
             }
           }
         }
@@ -96,15 +108,23 @@ pipeline {
 
     stage('Build Docker Image') {
       steps {
-        dir('.') {
-          sh """
-            docker build \
-              --build-arg NODE_ENV=production \
-              --tag ${env.IMAGE_URI} \
-              --file app/Dockerfile \
-              app
-          """
-          sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${env.IMAGE_URI}' || true"
+        script {
+          def repoRoot = fileExists('app/package.json') ? '.' :
+                         (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e' : null)
+          if (!repoRoot) {
+            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+          }
+          echo "Using repository root: ${repoRoot}"
+          dir(repoRoot) {
+            sh """
+              docker build \
+                --build-arg NODE_ENV=production \
+                --tag ${env.IMAGE_URI} \
+                --file app/Dockerfile \
+                app
+            """
+            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${env.IMAGE_URI}' || true"
+          }
         }
       }
     }
