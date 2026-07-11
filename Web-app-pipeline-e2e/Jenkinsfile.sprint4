@@ -117,12 +117,14 @@ pipeline {
           echo "Using repository root: ${repoRoot}"
           dir(repoRoot) {
             sh """
+              cd app
               docker build \
                 --build-arg NODE_ENV=production \
                 --tag ${env.IMAGE_URI} \
-                --file app/Dockerfile \
-                app
+                -f Dockerfile \
+                .
             """
+            sh "docker image inspect ${env.IMAGE_URI} >/dev/null 2>&1"
             sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${env.IMAGE_URI}' || true"
           }
         }
@@ -173,6 +175,11 @@ pipeline {
               if aws ecr describe-images --repository-name ${ecrRepoName} --image-ids imageTag=${imageTag} --region ${awsRegion} >/dev/null 2>&1; then
                 echo "Image ${imageUri} already exists in ECR; skipping push."
               else
+                docker image inspect ${imageUri} >/dev/null 2>&1 || {
+                  echo "Local image not found: ${imageUri}"
+                  docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}'
+                  exit 1
+                }
                 docker push ${imageUri}
               fi
             """
