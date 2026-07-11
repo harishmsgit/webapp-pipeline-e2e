@@ -100,7 +100,11 @@ pipeline {
               aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION} \
                 --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
             fi
-            docker push ${env.IMAGE_URI}
+            if aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${env.IMAGE_TAG} --region ${AWS_REGION} >/dev/null 2>&1; then
+              echo "Image ${env.IMAGE_URI} already exists in ECR; skipping push."
+            else
+              docker push ${env.IMAGE_URI}
+            fi
           """
         }
       }
