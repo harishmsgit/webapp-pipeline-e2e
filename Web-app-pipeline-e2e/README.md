@@ -15,8 +15,8 @@ This repository contains a complete, production-ready implementation of **Sprint
 ### ✨ What is Included
 
 - **Application**: Lightweight Node.js web application (see `app/`)
-- **Containerization**: Dockerfile and docker-compose.yml for local testing
-- **CI/CD Pipeline**: Jenkinsfile with automated build and push to AWS ECR
+- **Containerization**: Application image build with `app/Dockerfile`
+- **CI/CD Pipeline**: `Jenkinsfile.sprint4` for build, test, ECR push, and EKS deployment
 - **Documentation**: Complete setup guide and architecture design
 - **IAM Policies**: JSON policy templates for AWS access control
 - **Bootstrap Scripts**: Automated EC2 setup with all dependencies
@@ -92,9 +92,8 @@ New files for Sprint 4:
 Web-app-pipeline-e2e/
 ├── SPRINT1_SETUP_GUIDE.md          # ⭐ Start here: Complete step-by-step setup guide
 ├── README.md                        # This file
-├── Dockerfile                       # Docker image build instructions
-├── docker-compose.yml               # Local testing with Docker Compose
-├── Jenkinsfile                      # Jenkins CI/CD pipeline definition
+├── Dockerfile                       # Legacy/root image build used by GitHub Actions workflow
+├── Jenkinsfile.sprint4              # Active Jenkins pipeline for build, test, push, and deploy
 ├── Jenkinsfile.terraform            # Jenkins pipeline for Terraform infrastructure provisioning
 ├── SPRINT2_SETUP_GUIDE.md           # Sprint 2 Terraform and Jenkins integration guide
 ├── jenkins-ecr-policy.json          # AWS IAM policy for ECR access
@@ -108,9 +107,8 @@ Web-app-pipeline-e2e/
 │   ├── main.tf
 │   ├── outputs.tf
 │   ├── provider.tf
-│   ├── terraform.tfvars.example
-│   ├── variables.tf
-│   └── versions.tf
+├── Dockerfile                       # Legacy/root image build used by GitHub Actions workflow
+├── Jenkinsfile.sprint4              # Active Jenkins pipeline for build, test, push, and deploy
 │
 └── doc/
     ├── architecture-sprint1.md      # Architecture design and AWS integration plan
@@ -154,10 +152,6 @@ docker build -t web-app-sprint1:latest .
 
 # Run Docker image
 docker run -p 3000:3000 web-app-sprint1:latest
-
-# Test with Docker Compose
-docker compose up --build
-# Access at http://localhost:3000
 ```
 
 ### 2️⃣ AWS Setup (10 minutes)
@@ -285,30 +279,17 @@ Refer to the [SPRINT1_SETUP_GUIDE.md](SPRINT1_SETUP_GUIDE.md#troubleshooting) se
 
 ## 📝 Configuration
 
-### Update Jenkinsfile with Your AWS Details
+### Update Jenkinsfile.sprint4 Parameters
 
-Edit [Jenkinsfile](Jenkinsfile) to use your AWS account and region:
+Configure these Jenkins job parameters when using `Jenkinsfile.sprint4`:
 
-```groovy
-environment {
-    AWS_REGION = 'ap-south-1'              # Your AWS region
-    AWS_ACCOUNT_ID = '123456789012'        # Your AWS account ID
-    ECR_REPO_NAME = 'web-app-sprint1'      # Your ECR repository name
-}
-```
-
-### Update docker-compose.yml for Your Needs
-
-Edit [docker-compose.yml](docker-compose.yml) to change ports or environment:
-
-```yaml
-services:
-  web:
-    build: .
-    ports:
-      - "3000:3000"  # Change host port as needed
-    environment:
-      - NODE_ENV=production
+```text
+AWS_REGION=ap-south-1
+AWS_ACCOUNT_ID=123456789012
+ECR_REPO_NAME=web-app-sprint4
+EKS_CLUSTER_NAME=your-eks-cluster
+K8S_NAMESPACE=webapp
+RUN_DEPLOYMENT=true
 ```
 
 ## 📊 Metrics and Monitoring
