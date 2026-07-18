@@ -82,6 +82,20 @@ def ensureKubectl(script, kubectlVersion) {
   """)
 }
 
+def ensureHelm(script, helmVersion) {
+  script.sh("""
+    set -e
+    export PATH=\"\$HOME/bin:\$PATH\"
+    mkdir -p \"\$HOME/bin\"
+    if ! command -v helm >/dev/null 2>&1; then
+      curl -L https://get.helm.sh/helm-${helmVersion}-linux-amd64.tar.gz -o /tmp/helm.tgz
+      tar -xzf /tmp/helm.tgz -C /tmp
+      mv /tmp/linux-amd64/helm \"\$HOME/bin/helm\"
+      chmod +x \"\$HOME/bin/helm\"
+    fi
+  """)
+}
+
 def sendMonitoringNotification(script, status, message) {
   def webhook = script.params.ALERT_WEBHOOK_URL?.trim()
   if (!webhook) {
@@ -118,6 +132,9 @@ pipeline {
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'java-spring-eks', description: 'EKS cluster name')
     string(name: 'K8S_NAMESPACE', defaultValue: 'webapp', description: 'Kubernetes namespace')
     string(name: 'MONITORING_NAMESPACE', defaultValue: 'monitoring', description: 'Namespace where Prometheus/Grafana stack is running')
+    string(name: 'MONITORING_RELEASE_NAME', defaultValue: 'prometheus', description: 'Helm release name for kube-prometheus-stack')
+    string(name: 'HELM_VERSION', defaultValue: 'v3.15.4', description: 'Helm version used to bootstrap monitoring stack')
+    string(name: 'GRAFANA_ADMIN_PASSWORD', defaultValue: 'dev-grafana-admin', description: 'Grafana admin password used for bootstrap')
     booleanParam(name: 'ENABLE_MONITORING_CHECKS', defaultValue: true, description: 'Apply monitoring manifests and verify monitoring health')
     string(name: 'ALERT_WEBHOOK_URL', defaultValue: '', description: 'Optional webhook URL for Jenkins monitoring/failure notifications')
     booleanParam(name: 'RUN_DEPLOYMENT', defaultValue: true, description: 'Deploy to EKS after build')
@@ -138,6 +155,9 @@ pipeline {
     EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
     K8S_NAMESPACE = "${params.K8S_NAMESPACE}"
     MONITORING_NAMESPACE = "${params.MONITORING_NAMESPACE}"
+    MONITORING_RELEASE_NAME = "${params.MONITORING_RELEASE_NAME}"
+    HELM_VERSION = "${params.HELM_VERSION}"
+    GRAFANA_ADMIN_PASSWORD = "${params.GRAFANA_ADMIN_PASSWORD}"
     NODE_IMAGE = "node:18"
     KUBECTL_VERSION = "v1.30.0"
     REPO_ROOT = ""
@@ -348,9 +368,35 @@ pipeline {
                   curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o "\$KUBECTL"
                   chmod +x "\$KUBECTL"
                 fi
+                HELM="$HOME/bin/helm"
+                if [ ! -x "\$HELM" ]; then
+                  curl -L https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -o /tmp/helm.tgz
+                  tar -xzf /tmp/helm.tgz -C /tmp
+                  mv /tmp/linux-amd64/helm "\$HELM"
+                  chmod +x "\$HELM"
+                fi
 
                 aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
                 "\$KUBECTL" create namespace ${MONITORING_NAMESPACE} --dry-run=client -o yaml | "\$KUBECTL" apply -f -
+                if ! "\$KUBECTL" get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1 || \
+                   ! "\$KUBECTL" get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
+                  "\$HELM" repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
+                  "\$HELM" repo update >/dev/null
+                  "\$HELM" upgrade --install ${MONITORING_RELEASE_NAME} prometheus-community/kube-prometheus-stack \
+                    --namespace ${MONITORING_NAMESPACE} \
+                    --create-namespace \
+                    --set grafana.adminPassword=${GRAFANA_ADMIN_PASSWORD} \
+                    --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=1Gi
+                fi
+
+                for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                  if "\$KUBECTL" get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1 && \
+                     "\$KUBECTL" get crd prometheusrules.monitoring.coreos.com >/dev/null 2>&1; then
+                    break
+                  fi
+                  sleep 5
+                done
+
                 "\$KUBECTL" get crd servicemonitors.monitoring.coreos.com >/dev/null
                 "\$KUBECTL" get crd prometheusrules.monitoring.coreos.com >/dev/null
                 "\$KUBECTL" apply -f monitoring/service-monitor-webapp.yaml
@@ -375,9 +421,16 @@ pipeline {
               export PATH="$HOME/bin:$PATH"
               mkdir -p "$HOME/bin"
               KUBECTL="$HOME/bin/kubectl"
+              HELM="$HOME/bin/helm"
               if [ ! -x "\$KUBECTL" ]; then
                 curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o "\$KUBECTL"
                 chmod +x "\$KUBECTL"
+              fi
+              if [ ! -x "\$HELM" ]; then
+                curl -L https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -o /tmp/helm.tgz
+                tar -xzf /tmp/helm.tgz -C /tmp
+                mv /tmp/linux-amd64/helm "\$HELM"
+                chmod +x "\$HELM"
               fi
 
               aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
