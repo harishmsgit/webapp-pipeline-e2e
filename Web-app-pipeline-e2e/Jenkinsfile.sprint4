@@ -46,7 +46,20 @@ pipeline {
             error('Missing required ECR parameters: AWS_ACCOUNT_ID, AWS_REGION, or ECR_REPO_NAME. Check your Jenkins job parameter values.')
           }
 
-          def tag = params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
+          def tag = params.IMAGE_TAG?.trim()
+          if (!tag || tag.isEmpty()) {
+            tag = env.BUILD_NUMBER?.toString()
+          }
+          if (!tag || tag.isEmpty()) {
+            tag = currentBuild?.number?.toString()
+          }
+          if (!tag || tag.isEmpty()) {
+            tag = env.BUILD_ID?.toString()
+          }
+          if (!tag || tag.isEmpty()) {
+            tag = "${System.currentTimeMillis()}"
+          }
+          
           env.IMAGE_TAG = tag
           env.IMAGE_URI = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${tag}"
 
@@ -100,13 +113,25 @@ pipeline {
           if (!repoRoot) {
             error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
           }
-          def resolveTag = {
-            params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
+          def imageTag = env.IMAGE_TAG?.toString()
+          if (!imageTag || imageTag.isEmpty()) {
+            imageTag = params.IMAGE_TAG?.trim()
+          }
+          if (!imageTag || imageTag.isEmpty()) {
+            imageTag = env.BUILD_NUMBER?.toString()
+          }
+          if (!imageTag || imageTag.isEmpty()) {
+            imageTag = currentBuild?.number?.toString()
+          }
+          if (!imageTag || imageTag.isEmpty()) {
+            imageTag = env.BUILD_ID?.toString()
+          }
+          if (!imageTag || imageTag.isEmpty()) {
+            imageTag = "${System.currentTimeMillis()}"
           }
 
-          def imageTag = resolveTag()
           def imageUri = env.IMAGE_URI?.trim()
-          if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+          if (!imageUri || imageUri.isEmpty()) {
             imageUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO_NAME}:${imageTag}"
           }
 
@@ -142,13 +167,25 @@ pipeline {
             def awsRegion = params.AWS_REGION?.trim()
             def ecrRepoName = params.ECR_REPO_NAME?.trim()
 
-            def resolveTag = {
-              env.IMAGE_TAG?.trim() ?: params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
+            def imageTag = env.IMAGE_TAG?.toString()
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = params.IMAGE_TAG?.trim()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = env.BUILD_NUMBER?.toString()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = currentBuild?.number?.toString()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = env.BUILD_ID?.toString()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = "${System.currentTimeMillis()}"
             }
 
-            def imageTag = resolveTag()
             def imageUri = env.IMAGE_URI?.trim()
-            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+            if (!imageUri || imageUri.isEmpty()) {
               imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
             }
 
@@ -204,13 +241,25 @@ pipeline {
             def awsRegion = params.AWS_REGION?.trim()
             def ecrRepoName = params.ECR_REPO_NAME?.trim()
 
-            def resolveTag = {
-              env.IMAGE_TAG?.trim() ?: params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
+            def imageTag = env.IMAGE_TAG?.toString()
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = params.IMAGE_TAG?.trim()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = env.BUILD_NUMBER?.toString()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = currentBuild?.number?.toString()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = env.BUILD_ID?.toString()
+            }
+            if (!imageTag || imageTag.isEmpty()) {
+              imageTag = "${System.currentTimeMillis()}"
             }
 
-            def imageTag = resolveTag()
             def imageUri = env.IMAGE_URI?.trim()
-            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+            if (!imageUri || imageUri.isEmpty()) {
               imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
             }
 
@@ -245,10 +294,19 @@ pipeline {
         expression { return params.RUN_DEPLOYMENT }
       }
       steps {
-        sh '''
-          kubectl get all -n ${K8S_NAMESPACE}
-          kubectl get hpa -n ${K8S_NAMESPACE}
-        '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+            mkdir -p "$HOME/bin"
+            if ! command -v kubectl >/dev/null 2>&1; then
+              curl -L https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl -o "$HOME/bin/kubectl"
+              chmod +x "$HOME/bin/kubectl"
+            fi
+            kubectl get all -n ${K8S_NAMESPACE}
+            kubectl get hpa -n ${K8S_NAMESPACE}
+          '''
+        }
       }
     }
   }
