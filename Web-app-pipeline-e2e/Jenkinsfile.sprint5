@@ -82,6 +82,30 @@ def ensureKubectl(script, kubectlVersion) {
   """)
 }
 
+def sendMonitoringNotification(script, status, message) {
+  def webhook = script.params.ALERT_WEBHOOK_URL?.trim()
+  if (!webhook) {
+    script.echo('ALERT_WEBHOOK_URL not provided; skipping external notification.')
+    return
+  }
+
+  def payload = """{
+    \"status\": \"${status}\",
+    \"job\": \"${script.env.JOB_NAME ?: 'unknown'}\",
+    \"build\": \"${script.env.BUILD_NUMBER ?: 'unknown'}\",
+    \"buildUrl\": \"${script.env.BUILD_URL ?: 'unknown'}\",
+    \"message\": \"${message.replace('"', '\\\\"')}\"
+  }"""
+
+  script.sh """
+    set +e
+    curl -sS -X POST '${webhook}' \
+      -H 'Content-Type: application/json' \
+      -d '${payload}' >/dev/null
+    exit 0
+  """
+}
+
 pipeline {
   agent any
 
@@ -93,6 +117,9 @@ pipeline {
     string(name: 'IMAGE_TAG', defaultValue: '', description: 'Docker image tag; defaults to BUILD_NUMBER')
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'java-spring-eks', description: 'EKS cluster name')
     string(name: 'K8S_NAMESPACE', defaultValue: 'webapp', description: 'Kubernetes namespace')
+    string(name: 'MONITORING_NAMESPACE', defaultValue: 'monitoring', description: 'Namespace where Prometheus/Grafana stack is running')
+    booleanParam(name: 'ENABLE_MONITORING_CHECKS', defaultValue: true, description: 'Apply monitoring manifests and verify monitoring health')
+    string(name: 'ALERT_WEBHOOK_URL', defaultValue: '', description: 'Optional webhook URL for Jenkins monitoring/failure notifications')
     booleanParam(name: 'RUN_DEPLOYMENT', defaultValue: true, description: 'Deploy to EKS after build')
   }
 
@@ -110,6 +137,7 @@ pipeline {
     ECR_REPO_NAME = "${params.ECR_REPO_NAME}"
     EKS_CLUSTER_NAME = "${params.EKS_CLUSTER_NAME}"
     K8S_NAMESPACE = "${params.K8S_NAMESPACE}"
+    MONITORING_NAMESPACE = "${params.MONITORING_NAMESPACE}"
     NODE_IMAGE = "node:18"
     KUBECTL_VERSION = "v1.30.0"
     REPO_ROOT = ""
@@ -299,14 +327,90 @@ pipeline {
         }
       }
     }
+
+    stage('Configure Monitoring') {
+      when {
+        expression { return params.RUN_DEPLOYMENT && params.ENABLE_MONITORING_CHECKS }
+      }
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          script {
+            def ctx = buildPipelineContext(this)
+            applyPipelineContext(this, ctx)
+
+            dir(ctx.repoRoot) {
+              sh """
+                set -e
+                export PATH="$HOME/bin:$PATH"
+                mkdir -p "$HOME/bin"
+                KUBECTL="$HOME/bin/kubectl"
+                if [ ! -x "\$KUBECTL" ]; then
+                  curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o "\$KUBECTL"
+                  chmod +x "\$KUBECTL"
+                fi
+
+                aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                "\$KUBECTL" create namespace ${MONITORING_NAMESPACE} --dry-run=client -o yaml | "\$KUBECTL" apply -f -
+                "\$KUBECTL" get crd servicemonitors.monitoring.coreos.com >/dev/null
+                "\$KUBECTL" get crd prometheusrules.monitoring.coreos.com >/dev/null
+                "\$KUBECTL" apply -f monitoring/service-monitor-webapp.yaml
+                "\$KUBECTL" apply -f monitoring/prometheus-rules-webapp.yaml
+                "\$KUBECTL" apply -f monitoring/grafana-dashboard-webapp.yaml
+              """
+            }
+          }
+        }
+      }
+    }
+
+    stage('Monitoring Health Check') {
+      when {
+        expression { return params.RUN_DEPLOYMENT && params.ENABLE_MONITORING_CHECKS }
+      }
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
+          script {
+            sh """
+              set -e
+              export PATH="$HOME/bin:$PATH"
+              mkdir -p "$HOME/bin"
+              KUBECTL="$HOME/bin/kubectl"
+              if [ ! -x "\$KUBECTL" ]; then
+                curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o "\$KUBECTL"
+                chmod +x "\$KUBECTL"
+              fi
+
+              aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+
+              "\$KUBECTL" get pods -n ${MONITORING_NAMESPACE}
+              "\$KUBECTL" wait --for=condition=available deploy/prometheus-grafana -n ${MONITORING_NAMESPACE} --timeout=300s
+              "\$KUBECTL" get servicemonitor webapp-servicemonitor -n ${MONITORING_NAMESPACE}
+              "\$KUBECTL" get prometheusrule webapp-alert-rules -n ${MONITORING_NAMESPACE}
+
+              NOT_READY_NODES=$("\$KUBECTL" get nodes --no-headers | awk '$2 != "Ready" {count++} END {print count+0}')
+              if [ "\$NOT_READY_NODES" -gt 0 ]; then
+                echo "Detected \$NOT_READY_NODES non-ready nodes"
+                exit 1
+              fi
+            """
+          }
+        }
+      }
+    }
   }
 
   post {
     success {
       echo "Pipeline succeeded. Image deployed: ${env.IMAGE_URI ?: 'unknown'}"
+      script {
+        sendMonitoringNotification(this, 'success', 'Sprint pipeline deployment and monitoring checks completed successfully.')
+      }
     }
     failure {
       echo "Pipeline failed. Review logs for details."
+      script {
+        sendMonitoringNotification(this, 'failure', 'Sprint pipeline failed. Check deployment and monitoring health stages.')
+      }
     }
     always {
       cleanWs()

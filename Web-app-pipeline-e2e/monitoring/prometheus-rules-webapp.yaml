@@ -1,0 +1,85 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: webapp-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+    app.kubernetes.io/name: webapp
+spec:
+  groups:
+  - name: webapp-availability
+    rules:
+    - alert: WebAppTargetDown
+      expr: up{job=~".*webapp.*"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        service: webapp
+      annotations:
+        summary: Webapp target is down
+        description: Prometheus cannot scrape webapp metrics for more than 2 minutes.
+
+    - alert: WebAppHighRequestLatencyP95
+      expr: histogram_quantile(0.95, sum by (le) (rate(webapp_http_request_duration_seconds_bucket[5m]))) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        service: webapp
+      annotations:
+        summary: High webapp latency (p95)
+        description: Webapp p95 request latency is above 500ms for 5 minutes.
+
+    - alert: WebAppErrorRateHigh
+      expr: sum(rate(webapp_http_requests_total{status_code=~"5.."}[5m])) / clamp_min(sum(rate(webapp_http_requests_total[5m])), 0.001) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        service: webapp
+      annotations:
+        summary: Elevated 5xx error rate on webapp
+        description: More than 5% of webapp requests are returning 5xx for 5 minutes.
+
+  - name: webapp-resources
+    rules:
+    - alert: WebAppPodRestartingFrequently
+      expr: increase(kube_pod_container_status_restarts_total{namespace="webapp", container="webapp"}[15m]) > 3
+      for: 5m
+      labels:
+        severity: warning
+        service: webapp
+      annotations:
+        summary: Webapp pod is restarting frequently
+        description: Webapp container restarted more than 3 times in the last 15 minutes.
+
+    - alert: WebAppCpuHigh
+      expr: sum(rate(container_cpu_usage_seconds_total{namespace="webapp", pod=~"webapp-.*", container="webapp"}[5m])) > 0.25
+      for: 10m
+      labels:
+        severity: warning
+        service: webapp
+      annotations:
+        summary: High CPU usage for webapp pods
+        description: CPU usage is above 0.25 cores for 10 minutes.
+
+    - alert: WebAppMemoryHigh
+      expr: max(container_memory_working_set_bytes{namespace="webapp", pod=~"webapp-.*", container="webapp"}) > 220000000
+      for: 10m
+      labels:
+        severity: warning
+        service: webapp
+      annotations:
+        summary: High memory usage for webapp pods
+        description: Working set memory is above 220MB for 10 minutes.
+
+  - name: cluster-health
+    rules:
+    - alert: ClusterNodeNotReady
+      expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        service: infrastructure
+      annotations:
+        summary: Kubernetes node not ready
+        description: One or more EKS nodes are not Ready for at least 5 minutes.
