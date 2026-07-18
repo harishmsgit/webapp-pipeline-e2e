@@ -86,9 +86,9 @@ pipeline {
           echo "Initialized pipeline context"
           echo "AWS_REGION=${awsRegion}"
           echo "ECR_REPO_NAME=${ecrRepoName}"
-          echo "REPO_ROOT=${env.REPO_ROOT}"
-          echo "APP_DIR=${env.APP_DIR}"
-          echo "IMAGE_TAG=${env.IMAGE_TAG}"
+          echo "REPO_ROOT=${repoRoot}"
+          echo "APP_DIR=${appDir}"
+          echo "IMAGE_TAG=${tag}"
           echo "IMAGE_URI=${env.IMAGE_URI}"
         }
       }
@@ -97,8 +97,17 @@ pipeline {
     stage('Install Dependencies') {
       steps {
         script {
-          echo "Using app directory: ${env.APP_DIR}"
-          dir(env.APP_DIR) {
+          def appDir = env.APP_DIR?.trim()
+          if (!appDir || appDir.equalsIgnoreCase('null')) {
+            appDir = fileExists('app/package.json') ? 'app' :
+                     (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
+          }
+          if (!appDir) {
+            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+          }
+          env.APP_DIR = appDir
+          echo "Using app directory: ${appDir}"
+          dir(appDir) {
             docker.image(env.NODE_IMAGE).inside {
               sh 'pwd && ls -la && npm ci --no-audit --no-fund'
             }
@@ -110,8 +119,17 @@ pipeline {
     stage('Test') {
       steps {
         script {
-          echo "Using app directory: ${env.APP_DIR}"
-          dir(env.APP_DIR) {
+          def appDir = env.APP_DIR?.trim()
+          if (!appDir || appDir.equalsIgnoreCase('null')) {
+            appDir = fileExists('app/package.json') ? 'app' :
+                     (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
+          }
+          if (!appDir) {
+            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+          }
+          env.APP_DIR = appDir
+          echo "Using app directory: ${appDir}"
+          dir(appDir) {
             docker.image(env.NODE_IMAGE).inside {
               sh 'pwd && ls -la && npm test'
             }
@@ -123,21 +141,62 @@ pipeline {
     stage('Build Docker Image') {
       steps {
         script {
-          if (!env.IMAGE_URI?.trim()) {
-            error('IMAGE_URI was not initialized correctly.')
+          def appDir = env.APP_DIR?.trim()
+          if (!appDir || appDir.equalsIgnoreCase('null')) {
+            appDir = fileExists('app/package.json') ? 'app' :
+                     (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
           }
-          echo "Using repository root: ${env.REPO_ROOT}"
-          echo "Building image: ${env.IMAGE_URI}"
-          dir(env.REPO_ROOT) {
+          if (!appDir) {
+            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+          }
+
+          def repoRoot = env.REPO_ROOT?.trim()
+          if (!repoRoot || repoRoot.equalsIgnoreCase('null')) {
+            repoRoot = appDir.startsWith('Web-app-pipeline-e2e/') ? 'Web-app-pipeline-e2e' : '.'
+          }
+
+          def imageTag = env.IMAGE_TAG?.trim()
+          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+            imageTag = params.IMAGE_TAG?.trim()
+          }
+          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+            imageTag = env.BUILD_NUMBER?.toString()?.trim()
+          }
+          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+            imageTag = currentBuild?.number?.toString()?.trim()
+          }
+          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+            imageTag = env.BUILD_ID?.toString()?.trim()
+          }
+          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+            imageTag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          }
+          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+            imageTag = "${System.currentTimeMillis()}"
+          }
+
+          def imageUri = env.IMAGE_URI?.trim()
+          if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+            imageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${imageTag}"
+          }
+
+          env.APP_DIR = appDir
+          env.REPO_ROOT = repoRoot
+          env.IMAGE_TAG = imageTag
+          env.IMAGE_URI = imageUri
+
+          echo "Using repository root: ${repoRoot}"
+          echo "Building image: ${imageUri}"
+          dir(repoRoot) {
             sh """
               docker build \
                 --build-arg NODE_ENV=production \
-                --tag '${env.IMAGE_URI}' \
+                --tag '${imageUri}' \
                 --file app/Dockerfile \
                 app
             """
-            sh "docker image inspect '${env.IMAGE_URI}' >/dev/null 2>&1"
-            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${env.IMAGE_URI}' || true"
+            sh "docker image inspect '${imageUri}' >/dev/null 2>&1"
+            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${imageUri}' || true"
           }
         }
       }
@@ -154,17 +213,45 @@ pipeline {
             def awsRegion = params.AWS_REGION?.trim()
             def ecrRepoName = params.ECR_REPO_NAME?.trim()
 
+            def imageTag = env.IMAGE_TAG?.trim()
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = params.IMAGE_TAG?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = env.BUILD_NUMBER?.toString()?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = currentBuild?.number?.toString()?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = env.BUILD_ID?.toString()?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = "${System.currentTimeMillis()}"
+            }
+
+            def imageUri = env.IMAGE_URI?.trim()
+            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+              imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
+            }
+
+            env.IMAGE_TAG = imageTag
+            env.IMAGE_URI = imageUri
+
             echo "AWS_ACCOUNT_ID=${awsAccountId}"
             echo "AWS_REGION=${awsRegion}"
             echo "ECR_REPO_NAME=${ecrRepoName}"
-            echo "IMAGE_TAG=${env.IMAGE_TAG}"
-            echo "ECR push target: ${env.IMAGE_URI}"
+            echo "IMAGE_TAG=${imageTag}"
+            echo "ECR push target: ${imageUri}"
 
             if (!awsAccountId || awsAccountId.equalsIgnoreCase('null') ||
                 !awsRegion || awsRegion.equalsIgnoreCase('null') ||
                 !ecrRepoName || ecrRepoName.equalsIgnoreCase('null') ||
-                !env.IMAGE_TAG || env.IMAGE_TAG.equalsIgnoreCase('null') ||
-                !env.IMAGE_URI || env.IMAGE_URI.equalsIgnoreCase('null')) {
+                !imageTag || imageTag.equalsIgnoreCase('null') ||
+                !imageUri || imageUri.equalsIgnoreCase('null')) {
               error('Invalid AWS/ECR values. Check parameters and build environment.')
             }
 
@@ -176,15 +263,15 @@ pipeline {
                 aws ecr create-repository --repository-name ${ecrRepoName} --region ${awsRegion} \
                   --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
               fi
-              if aws ecr describe-images --repository-name ${ecrRepoName} --image-ids imageTag=${env.IMAGE_TAG} --region ${awsRegion} >/dev/null 2>&1; then
-                echo "Image ${env.IMAGE_URI} already exists in ECR; skipping push."
+              if aws ecr describe-images --repository-name ${ecrRepoName} --image-ids imageTag=${imageTag} --region ${awsRegion} >/dev/null 2>&1; then
+                echo "Image ${imageUri} already exists in ECR; skipping push."
               else
-                docker image inspect ${env.IMAGE_URI} >/dev/null 2>&1 || {
-                  echo "Local image not found: ${env.IMAGE_URI}"
+                docker image inspect ${imageUri} >/dev/null 2>&1 || {
+                  echo "Local image not found: ${imageUri}"
                   docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}'
                   exit 1
                 }
-                docker push ${env.IMAGE_URI}
+                docker push ${imageUri}
               fi
             """
           }
@@ -199,12 +286,52 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           script {
-            if (!env.IMAGE_URI?.trim()) {
-              error('IMAGE_URI is missing; deployment aborted.')
+            def appDir = env.APP_DIR?.trim()
+            if (!appDir || appDir.equalsIgnoreCase('null')) {
+              appDir = fileExists('app/package.json') ? 'app' :
+                       (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
+            }
+            if (!appDir) {
+              error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
             }
 
-            echo "Deploying image ${env.IMAGE_URI}"
-            dir(env.REPO_ROOT) {
+            def repoRoot = env.REPO_ROOT?.trim()
+            if (!repoRoot || repoRoot.equalsIgnoreCase('null')) {
+              repoRoot = appDir.startsWith('Web-app-pipeline-e2e/') ? 'Web-app-pipeline-e2e' : '.'
+            }
+
+            def imageTag = env.IMAGE_TAG?.trim()
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = params.IMAGE_TAG?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = env.BUILD_NUMBER?.toString()?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = currentBuild?.number?.toString()?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = env.BUILD_ID?.toString()?.trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+            }
+            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+              imageTag = "${System.currentTimeMillis()}"
+            }
+
+            def imageUri = env.IMAGE_URI?.trim()
+            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+              imageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${imageTag}"
+            }
+
+            env.APP_DIR = appDir
+            env.REPO_ROOT = repoRoot
+            env.IMAGE_TAG = imageTag
+            env.IMAGE_URI = imageUri
+
+            echo "Deploying image ${imageUri}"
+            dir(repoRoot) {
               sh """
                 set -e
                 export PATH=\"$HOME/bin:$PATH\"
@@ -215,7 +342,7 @@ pipeline {
                 fi
                 aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
                 kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                sed \"s|REPLACE_IMAGE|${env.IMAGE_URI}|g\" k8s/deployment.yaml | kubectl apply -f -
+                sed \"s|REPLACE_IMAGE|${imageUri}|g\" k8s/deployment.yaml | kubectl apply -f -
                 kubectl apply -f k8s/service.yaml
                 kubectl apply -f k8s/hpa.yaml
                 kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
