@@ -32,6 +32,9 @@ This handover covers the current repository state for:
 4. `04-support-runbook.md`
 - incident triage model, common failure patterns, rollback guidance, and ownership map
 
+5. `05-execution-flow-diagrams.md`
+- visual execution flow and sequence diagrams for pipeline operations
+
 ## 4. Delivery Model (Quick Summary)
 - Terraform pipeline provisions or updates platform resources.
 - Ansible pipeline configures management host and validates connectivity/tooling.

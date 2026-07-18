@@ -91,6 +91,7 @@ This catalog lists each current top-level folder and file and explains its purpo
 | `Docs/sprint4-handover/02-configuration-reference.md` | Consolidated config reference |
 | `Docs/sprint4-handover/03-operations-commands.md` | Command runbook |
 | `Docs/sprint4-handover/04-support-runbook.md` | Incident/support runbook |
+| `Docs/sprint4-handover/05-execution-flow-diagrams.md` | Execution flow and sequence diagrams for delivery operations |
 
 ## H. k8s/ Files
 
