@@ -46,32 +46,12 @@ pipeline {
             error('Missing required ECR parameters: AWS_ACCOUNT_ID, AWS_REGION, or ECR_REPO_NAME. Check your Jenkins job parameter values.')
           }
 
-          def resolveTag = {
-            def candidate = params.IMAGE_TAG?.trim()
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = env.BUILD_NUMBER?.trim()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = currentBuild?.number?.toString()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = env.BUILD_ID?.trim()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = "${System.currentTimeMillis()}"
-            }
-            return candidate
-          }
-
-          def tag = resolveTag()
+          def tag = params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
           env.IMAGE_TAG = tag
           env.IMAGE_URI = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${tag}"
 
-          echo "BUILD_NUMBER=${env.BUILD_NUMBER}"
-          echo "currentBuild.number=${currentBuild?.number}"
-          echo "BUILD_ID=${env.BUILD_ID}"
-          echo "IMAGE_TAG=${env.IMAGE_TAG}"
-          echo "Image URI: ${env.IMAGE_URI}"
+          echo "Resolved IMAGE_TAG=${env.IMAGE_TAG}"
+          echo "Resolved Image URI: ${env.IMAGE_URI}"
         }
       }
     }
@@ -121,23 +101,7 @@ pipeline {
             error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
           }
           def resolveTag = {
-            def candidate = env.IMAGE_TAG?.trim()
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = params.IMAGE_TAG?.trim()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = env.BUILD_NUMBER?.trim()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = currentBuild?.number?.toString()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = env.BUILD_ID?.trim()
-            }
-            if (!candidate || candidate.equalsIgnoreCase('null')) {
-              candidate = "${System.currentTimeMillis()}"
-            }
-            return candidate
+            params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
           }
 
           def imageTag = resolveTag()
@@ -179,23 +143,7 @@ pipeline {
             def ecrRepoName = params.ECR_REPO_NAME?.trim()
 
             def resolveTag = {
-              def candidate = env.IMAGE_TAG?.trim()
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = params.IMAGE_TAG?.trim()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = env.BUILD_NUMBER?.trim()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = currentBuild?.number?.toString()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = env.BUILD_ID?.trim()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = "${System.currentTimeMillis()}"
-              }
-              return candidate
+              env.IMAGE_TAG?.trim() ?: params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
             }
 
             def imageTag = resolveTag()
@@ -257,23 +205,7 @@ pipeline {
             def ecrRepoName = params.ECR_REPO_NAME?.trim()
 
             def resolveTag = {
-              def candidate = env.IMAGE_TAG?.trim()
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = params.IMAGE_TAG?.trim()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = env.BUILD_NUMBER?.trim()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = currentBuild?.number?.toString()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = env.BUILD_ID?.trim()
-              }
-              if (!candidate || candidate.equalsIgnoreCase('null')) {
-                candidate = "${System.currentTimeMillis()}"
-              }
-              return candidate
+              env.IMAGE_TAG?.trim() ?: params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString() ?: currentBuild?.number?.toString() ?: env.BUILD_ID?.trim() ?: "${System.currentTimeMillis()}"
             }
 
             def imageTag = resolveTag()
@@ -286,7 +218,7 @@ pipeline {
             env.IMAGE_URI = imageUri
 
             echo "Deploying image ${imageUri}"
-            dir('.') {
+            dir('Web-app-pipeline-e2e') {
               sh """
                 set -e
                 export PATH=\"$HOME/bin:$PATH\"
