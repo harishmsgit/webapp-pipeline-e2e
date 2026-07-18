@@ -254,15 +254,21 @@ pipeline {
 
             echo "Deploying image ${ctx.imageUri}"
             dir(ctx.repoRoot) {
-              ensureKubectl(this, KUBECTL_VERSION)
               sh """
                 set -e
+                export PATH=\"$HOME/bin:$PATH\"
+                mkdir -p \"$HOME/bin\"
+                KUBECTL=\"$HOME/bin/kubectl\"
+                if [ ! -x \"$KUBECTL\" ]; then
+                  curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o \"$KUBECTL\"
+                  chmod +x \"$KUBECTL\"
+                fi
                 aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-                kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                sed \"s|REPLACE_IMAGE|${ctx.imageUri}|g\" k8s/deployment.yaml | kubectl apply -f -
-                kubectl apply -f k8s/service.yaml
-                kubectl apply -f k8s/hpa.yaml
-                kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
+                \"$KUBECTL\" create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | \"$KUBECTL\" apply -f -
+                sed \"s|REPLACE_IMAGE|${ctx.imageUri}|g\" k8s/deployment.yaml | \"$KUBECTL\" apply -f -
+                \"$KUBECTL\" apply -f k8s/service.yaml
+                \"$KUBECTL\" apply -f k8s/hpa.yaml
+                \"$KUBECTL\" rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
               """
             }
           }
@@ -277,12 +283,17 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           script {
-            ensureKubectl(this, KUBECTL_VERSION)
             sh '''
               set -e
               export PATH="$HOME/bin:$PATH"
-              kubectl get all -n ${K8S_NAMESPACE}
-              kubectl get hpa -n ${K8S_NAMESPACE}
+              mkdir -p "$HOME/bin"
+              KUBECTL="$HOME/bin/kubectl"
+              if [ ! -x "$KUBECTL" ]; then
+                curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o "$KUBECTL"
+                chmod +x "$KUBECTL"
+              fi
+              "$KUBECTL" get all -n ${K8S_NAMESPACE}
+              "$KUBECTL" get hpa -n ${K8S_NAMESPACE}
             '''
           }
         }
