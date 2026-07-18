@@ -1,3 +1,87 @@
+def buildPipelineContext(script) {
+  def awsAccountId = script.params.AWS_ACCOUNT_ID?.trim()
+  def awsRegion = script.params.AWS_REGION?.trim()
+  def ecrRepoName = script.params.ECR_REPO_NAME?.trim()
+
+  if (!awsAccountId || awsAccountId.equalsIgnoreCase('null')) {
+    script.error('AWS_ACCOUNT_ID is required.')
+  }
+  if (!awsRegion || awsRegion.equalsIgnoreCase('null')) {
+    script.error('AWS_REGION is required.')
+  }
+  if (!ecrRepoName || ecrRepoName.equalsIgnoreCase('null')) {
+    script.error('ECR_REPO_NAME is required.')
+  }
+
+  def appDir = script.env.APP_DIR?.trim()
+  if (!appDir || appDir.equalsIgnoreCase('null')) {
+    appDir = script.fileExists('app/package.json') ? 'app' :
+             (script.fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
+  }
+  if (!appDir) {
+    script.error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
+  }
+
+  def repoRoot = script.env.REPO_ROOT?.trim()
+  if (!repoRoot || repoRoot.equalsIgnoreCase('null')) {
+    repoRoot = appDir.startsWith('Web-app-pipeline-e2e/') ? 'Web-app-pipeline-e2e' : '.'
+  }
+
+  def imageTag = script.env.IMAGE_TAG?.trim()
+  if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+    imageTag = script.params.IMAGE_TAG?.trim()
+  }
+  if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+    imageTag = script.env.BUILD_NUMBER?.toString()?.trim()
+  }
+  if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+    imageTag = script.currentBuild?.number?.toString()?.trim()
+  }
+  if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+    imageTag = script.env.BUILD_ID?.toString()?.trim()
+  }
+  if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+    imageTag = script.sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+  }
+  if (!imageTag || imageTag.equalsIgnoreCase('null')) {
+    imageTag = "${System.currentTimeMillis()}"
+  }
+
+  def imageUri = script.env.IMAGE_URI?.trim()
+  if (!imageUri || imageUri.equalsIgnoreCase('null')) {
+    imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
+  }
+
+  return [
+    awsAccountId: awsAccountId,
+    awsRegion: awsRegion,
+    ecrRepoName: ecrRepoName,
+    appDir: appDir,
+    repoRoot: repoRoot,
+    imageTag: imageTag,
+    imageUri: imageUri,
+  ]
+}
+
+def applyPipelineContext(script, ctx) {
+  script.env.APP_DIR = ctx.appDir
+  script.env.REPO_ROOT = ctx.repoRoot
+  script.env.IMAGE_TAG = ctx.imageTag
+  script.env.IMAGE_URI = ctx.imageUri
+}
+
+def ensureKubectl(script, kubectlVersion) {
+  script.sh("""
+    set -e
+    export PATH=\"\$HOME/bin:\$PATH\"
+    mkdir -p \"\$HOME/bin\"
+    if ! command -v kubectl >/dev/null 2>&1; then
+      curl -L https://dl.k8s.io/release/${kubectlVersion}/bin/linux/amd64/kubectl -o \"\$HOME/bin/kubectl\"
+      chmod +x \"\$HOME/bin/kubectl\"
+    fi
+  """)
+}
+
 pipeline {
   agent any
 
@@ -39,57 +123,16 @@ pipeline {
       steps {
         checkout scm
         script {
-          def awsAccountId = params.AWS_ACCOUNT_ID?.trim()
-          def awsRegion = params.AWS_REGION?.trim()
-          def ecrRepoName = params.ECR_REPO_NAME?.trim()
-
-          if (!awsAccountId || awsAccountId.equalsIgnoreCase('null')) {
-            error('AWS_ACCOUNT_ID is required.')
-          }
-          if (!awsRegion || awsRegion.equalsIgnoreCase('null')) {
-            error('AWS_REGION is required.')
-          }
-          if (!ecrRepoName || ecrRepoName.equalsIgnoreCase('null')) {
-            error('ECR_REPO_NAME is required.')
-          }
-
-          def appDir = fileExists('app/package.json') ? 'app' :
-                       (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
-          if (!appDir) {
-            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
-          }
-
-          def repoRoot = appDir.startsWith('Web-app-pipeline-e2e/') ? 'Web-app-pipeline-e2e' : '.'
-
-          def tag = params.IMAGE_TAG?.trim()
-          if (!tag || tag.equalsIgnoreCase('null')) {
-            tag = env.BUILD_NUMBER?.toString()?.trim()
-          }
-          if (!tag || tag.equalsIgnoreCase('null')) {
-            tag = currentBuild?.number?.toString()?.trim()
-          }
-          if (!tag || tag.equalsIgnoreCase('null')) {
-            tag = env.BUILD_ID?.toString()?.trim()
-          }
-          if (!tag || tag.equalsIgnoreCase('null')) {
-            tag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-          }
-          if (!tag || tag.equalsIgnoreCase('null')) {
-            tag = "${System.currentTimeMillis()}"
-          }
-
-          env.APP_DIR = appDir
-          env.REPO_ROOT = repoRoot
-          env.IMAGE_TAG = tag
-          env.IMAGE_URI = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${tag}"
+          def ctx = buildPipelineContext(this)
+          applyPipelineContext(this, ctx)
 
           echo "Initialized pipeline context"
-          echo "AWS_REGION=${awsRegion}"
-          echo "ECR_REPO_NAME=${ecrRepoName}"
-          echo "REPO_ROOT=${repoRoot}"
-          echo "APP_DIR=${appDir}"
-          echo "IMAGE_TAG=${tag}"
-          echo "IMAGE_URI=${env.IMAGE_URI}"
+          echo "AWS_REGION=${ctx.awsRegion}"
+          echo "ECR_REPO_NAME=${ctx.ecrRepoName}"
+          echo "REPO_ROOT=${ctx.repoRoot}"
+          echo "APP_DIR=${ctx.appDir}"
+          echo "IMAGE_TAG=${ctx.imageTag}"
+          echo "IMAGE_URI=${ctx.imageUri}"
         }
       }
     }
@@ -97,15 +140,10 @@ pipeline {
     stage('Install Dependencies') {
       steps {
         script {
-          def appDir = env.APP_DIR?.trim()
-          if (!appDir || appDir.equalsIgnoreCase('null')) {
-            appDir = fileExists('app/package.json') ? 'app' :
-                     (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
-          }
-          if (!appDir) {
-            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
-          }
-          env.APP_DIR = appDir
+          def ctx = buildPipelineContext(this)
+          applyPipelineContext(this, ctx)
+
+          def appDir = ctx.appDir
           echo "Using app directory: ${appDir}"
           dir(appDir) {
             docker.image(env.NODE_IMAGE).inside {
@@ -119,15 +157,10 @@ pipeline {
     stage('Test') {
       steps {
         script {
-          def appDir = env.APP_DIR?.trim()
-          if (!appDir || appDir.equalsIgnoreCase('null')) {
-            appDir = fileExists('app/package.json') ? 'app' :
-                     (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
-          }
-          if (!appDir) {
-            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
-          }
-          env.APP_DIR = appDir
+          def ctx = buildPipelineContext(this)
+          applyPipelineContext(this, ctx)
+
+          def appDir = ctx.appDir
           echo "Using app directory: ${appDir}"
           dir(appDir) {
             docker.image(env.NODE_IMAGE).inside {
@@ -141,62 +174,21 @@ pipeline {
     stage('Build Docker Image') {
       steps {
         script {
-          def appDir = env.APP_DIR?.trim()
-          if (!appDir || appDir.equalsIgnoreCase('null')) {
-            appDir = fileExists('app/package.json') ? 'app' :
-                     (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
-          }
-          if (!appDir) {
-            error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
-          }
+          def ctx = buildPipelineContext(this)
+          applyPipelineContext(this, ctx)
 
-          def repoRoot = env.REPO_ROOT?.trim()
-          if (!repoRoot || repoRoot.equalsIgnoreCase('null')) {
-            repoRoot = appDir.startsWith('Web-app-pipeline-e2e/') ? 'Web-app-pipeline-e2e' : '.'
-          }
-
-          def imageTag = env.IMAGE_TAG?.trim()
-          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-            imageTag = params.IMAGE_TAG?.trim()
-          }
-          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-            imageTag = env.BUILD_NUMBER?.toString()?.trim()
-          }
-          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-            imageTag = currentBuild?.number?.toString()?.trim()
-          }
-          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-            imageTag = env.BUILD_ID?.toString()?.trim()
-          }
-          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-            imageTag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-          }
-          if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-            imageTag = "${System.currentTimeMillis()}"
-          }
-
-          def imageUri = env.IMAGE_URI?.trim()
-          if (!imageUri || imageUri.equalsIgnoreCase('null')) {
-            imageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${imageTag}"
-          }
-
-          env.APP_DIR = appDir
-          env.REPO_ROOT = repoRoot
-          env.IMAGE_TAG = imageTag
-          env.IMAGE_URI = imageUri
-
-          echo "Using repository root: ${repoRoot}"
-          echo "Building image: ${imageUri}"
-          dir(repoRoot) {
+          echo "Using repository root: ${ctx.repoRoot}"
+          echo "Building image: ${ctx.imageUri}"
+          dir(ctx.repoRoot) {
             sh """
               docker build \
                 --build-arg NODE_ENV=production \
-                --tag '${imageUri}' \
+                --tag '${ctx.imageUri}' \
                 --file app/Dockerfile \
                 app
             """
-            sh "docker image inspect '${imageUri}' >/dev/null 2>&1"
-            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${imageUri}' || true"
+            sh "docker image inspect '${ctx.imageUri}' >/dev/null 2>&1"
+            sh "docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -F '${ctx.imageUri}' || true"
           }
         }
       }
@@ -209,69 +201,40 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           script {
-            def awsAccountId = params.AWS_ACCOUNT_ID?.trim()
-            def awsRegion = params.AWS_REGION?.trim()
-            def ecrRepoName = params.ECR_REPO_NAME?.trim()
+            def ctx = buildPipelineContext(this)
+            applyPipelineContext(this, ctx)
 
-            def imageTag = env.IMAGE_TAG?.trim()
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = params.IMAGE_TAG?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = env.BUILD_NUMBER?.toString()?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = currentBuild?.number?.toString()?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = env.BUILD_ID?.toString()?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = "${System.currentTimeMillis()}"
-            }
+            echo "AWS_ACCOUNT_ID=${ctx.awsAccountId}"
+            echo "AWS_REGION=${ctx.awsRegion}"
+            echo "ECR_REPO_NAME=${ctx.ecrRepoName}"
+            echo "IMAGE_TAG=${ctx.imageTag}"
+            echo "ECR push target: ${ctx.imageUri}"
 
-            def imageUri = env.IMAGE_URI?.trim()
-            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
-              imageUri = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
-            }
-
-            env.IMAGE_TAG = imageTag
-            env.IMAGE_URI = imageUri
-
-            echo "AWS_ACCOUNT_ID=${awsAccountId}"
-            echo "AWS_REGION=${awsRegion}"
-            echo "ECR_REPO_NAME=${ecrRepoName}"
-            echo "IMAGE_TAG=${imageTag}"
-            echo "ECR push target: ${imageUri}"
-
-            if (!awsAccountId || awsAccountId.equalsIgnoreCase('null') ||
-                !awsRegion || awsRegion.equalsIgnoreCase('null') ||
-                !ecrRepoName || ecrRepoName.equalsIgnoreCase('null') ||
-                !imageTag || imageTag.equalsIgnoreCase('null') ||
-                !imageUri || imageUri.equalsIgnoreCase('null')) {
+            if (!ctx.awsAccountId || ctx.awsAccountId.equalsIgnoreCase('null') ||
+                !ctx.awsRegion || ctx.awsRegion.equalsIgnoreCase('null') ||
+                !ctx.ecrRepoName || ctx.ecrRepoName.equalsIgnoreCase('null') ||
+                !ctx.imageTag || ctx.imageTag.equalsIgnoreCase('null') ||
+                !ctx.imageUri || ctx.imageUri.equalsIgnoreCase('null')) {
               error('Invalid AWS/ECR values. Check parameters and build environment.')
             }
 
             sh """
               set -e
-              aws ecr get-login-password --region ${awsRegion} | docker login \
-                --username AWS --password-stdin ${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com
-              if ! aws ecr describe-repositories --repository-names ${ecrRepoName} --region ${awsRegion} >/dev/null 2>&1; then
-                aws ecr create-repository --repository-name ${ecrRepoName} --region ${awsRegion} \
+              aws ecr get-login-password --region ${ctx.awsRegion} | docker login \
+                --username AWS --password-stdin ${ctx.awsAccountId}.dkr.ecr.${ctx.awsRegion}.amazonaws.com
+              if ! aws ecr describe-repositories --repository-names ${ctx.ecrRepoName} --region ${ctx.awsRegion} >/dev/null 2>&1; then
+                aws ecr create-repository --repository-name ${ctx.ecrRepoName} --region ${ctx.awsRegion} \
                   --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true
               fi
-              if aws ecr describe-images --repository-name ${ecrRepoName} --image-ids imageTag=${imageTag} --region ${awsRegion} >/dev/null 2>&1; then
-                echo "Image ${imageUri} already exists in ECR; skipping push."
+              if aws ecr describe-images --repository-name ${ctx.ecrRepoName} --image-ids imageTag=${ctx.imageTag} --region ${ctx.awsRegion} >/dev/null 2>&1; then
+                echo "Image ${ctx.imageUri} already exists in ECR; skipping push."
               else
-                docker image inspect ${imageUri} >/dev/null 2>&1 || {
-                  echo "Local image not found: ${imageUri}"
+                docker image inspect ${ctx.imageUri} >/dev/null 2>&1 || {
+                  echo "Local image not found: ${ctx.imageUri}"
                   docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}'
                   exit 1
                 }
-                docker push ${imageUri}
+                docker push ${ctx.imageUri}
               fi
             """
           }
@@ -286,63 +249,17 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
           script {
-            def appDir = env.APP_DIR?.trim()
-            if (!appDir || appDir.equalsIgnoreCase('null')) {
-              appDir = fileExists('app/package.json') ? 'app' :
-                       (fileExists('Web-app-pipeline-e2e/app/package.json') ? 'Web-app-pipeline-e2e/app' : null)
-            }
-            if (!appDir) {
-              error('Could not locate app/package.json in workspace; check repository layout and checkout path.')
-            }
+            def ctx = buildPipelineContext(this)
+            applyPipelineContext(this, ctx)
 
-            def repoRoot = env.REPO_ROOT?.trim()
-            if (!repoRoot || repoRoot.equalsIgnoreCase('null')) {
-              repoRoot = appDir.startsWith('Web-app-pipeline-e2e/') ? 'Web-app-pipeline-e2e' : '.'
-            }
-
-            def imageTag = env.IMAGE_TAG?.trim()
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = params.IMAGE_TAG?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = env.BUILD_NUMBER?.toString()?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = currentBuild?.number?.toString()?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = env.BUILD_ID?.toString()?.trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-            }
-            if (!imageTag || imageTag.equalsIgnoreCase('null')) {
-              imageTag = "${System.currentTimeMillis()}"
-            }
-
-            def imageUri = env.IMAGE_URI?.trim()
-            if (!imageUri || imageUri.equalsIgnoreCase('null')) {
-              imageUri = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${imageTag}"
-            }
-
-            env.APP_DIR = appDir
-            env.REPO_ROOT = repoRoot
-            env.IMAGE_TAG = imageTag
-            env.IMAGE_URI = imageUri
-
-            echo "Deploying image ${imageUri}"
-            dir(repoRoot) {
+            echo "Deploying image ${ctx.imageUri}"
+            dir(ctx.repoRoot) {
+              ensureKubectl(this, KUBECTL_VERSION)
               sh """
                 set -e
-                export PATH=\"$HOME/bin:$PATH\"
-                mkdir -p \"$HOME/bin\"
-                if ! command -v kubectl >/dev/null 2>&1; then
-                  curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o \"$HOME/bin/kubectl\"
-                  chmod +x \"$HOME/bin/kubectl\"
-                fi
                 aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
                 kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                sed \"s|REPLACE_IMAGE|${imageUri}|g\" k8s/deployment.yaml | kubectl apply -f -
+                sed \"s|REPLACE_IMAGE|${ctx.imageUri}|g\" k8s/deployment.yaml | kubectl apply -f -
                 kubectl apply -f k8s/service.yaml
                 kubectl apply -f k8s/hpa.yaml
                 kubectl rollout status deployment/webapp -n ${K8S_NAMESPACE} --timeout=300s
@@ -359,17 +276,15 @@ pipeline {
       }
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIALS_ID]]) {
-          sh '''
-            set -e
-            export PATH="$HOME/bin:$PATH"
-            mkdir -p "$HOME/bin"
-            if ! command -v kubectl >/dev/null 2>&1; then
-              curl -L https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl -o "$HOME/bin/kubectl"
-              chmod +x "$HOME/bin/kubectl"
-            fi
-            kubectl get all -n ${K8S_NAMESPACE}
-            kubectl get hpa -n ${K8S_NAMESPACE}
-          '''
+          script {
+            ensureKubectl(this, KUBECTL_VERSION)
+            sh '''
+              set -e
+              export PATH="$HOME/bin:$PATH"
+              kubectl get all -n ${K8S_NAMESPACE}
+              kubectl get hpa -n ${K8S_NAMESPACE}
+            '''
+          }
         }
       }
     }
