@@ -387,7 +387,7 @@ pipeline {
               "\$KUBECTL" get servicemonitor webapp-servicemonitor -n ${MONITORING_NAMESPACE}
               "\$KUBECTL" get prometheusrule webapp-alert-rules -n ${MONITORING_NAMESPACE}
 
-              NOT_READY_NODES=$("\$KUBECTL" get nodes --no-headers | awk '$2 != "Ready" {count++} END {print count+0}')
+              NOT_READY_NODES=$("\$KUBECTL" get nodes --no-headers | awk '\$2 != "Ready" {count++} END {print count+0}')
               if [ "\$NOT_READY_NODES" -gt 0 ]; then
                 echo "Detected \$NOT_READY_NODES non-ready nodes"
                 exit 1
