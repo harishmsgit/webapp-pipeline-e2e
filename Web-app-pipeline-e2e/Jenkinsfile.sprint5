@@ -463,9 +463,15 @@ pipeline {
       script {
         def deployedImage = env.IMAGE_URI?.trim()
         if (!deployedImage) {
-          def ctx = buildPipelineContext(this)
-          applyPipelineContext(this, ctx)
-          deployedImage = ctx.imageUri
+          def awsAccountId = params.AWS_ACCOUNT_ID?.trim() ?: env.AWS_ACCOUNT_ID?.trim()
+          def awsRegion = params.AWS_REGION?.trim() ?: env.AWS_REGION?.trim()
+          def ecrRepoName = params.ECR_REPO_NAME?.trim() ?: env.ECR_REPO_NAME?.trim()
+          def imageTag = env.IMAGE_TAG?.trim() ?: params.IMAGE_TAG?.trim() ?: env.BUILD_NUMBER?.toString()?.trim()
+          if (awsAccountId && awsRegion && ecrRepoName && imageTag) {
+            deployedImage = "${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com/${ecrRepoName}:${imageTag}"
+          } else {
+            deployedImage = 'unknown'
+          }
         }
         echo "Pipeline succeeded. Image deployed: ${deployedImage}"
         sendMonitoringNotification(this, 'success', 'Sprint pipeline deployment and monitoring checks completed successfully.')
