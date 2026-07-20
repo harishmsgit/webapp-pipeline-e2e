@@ -1,0 +1,159 @@
+# EKS AWS Commands - Check Everything
+
+Use these commands from repo root unless noted.
+
+## 1. Local Tooling and Build Checks
+
+```bash
+# verify CLIs
+aws --version
+kubectl version --client
+docker --version
+terraform -version
+ansible --version
+
+# app checks
+cd app
+npm ci
+npm test
+npm start
+
+# build local image
+cd app
+docker build -t web-app-sprint4:local -f Dockerfile .
+docker images | grep web-app-sprint4
+```
+
+## 2. AWS Identity and Variables
+
+```bash
+aws sts get-caller-identity --region ap-south-1
+
+export AWS_REGION=ap-south-1
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export ECR_REPO_NAME=web-app-sprint4
+export EKS_CLUSTER_NAME=java-spring-eks
+export K8S_NAMESPACE=webapp
+
+# optional sanity checks
+echo "$AWS_REGION"
+echo "$AWS_ACCOUNT_ID"
+echo "$ECR_REPO_NAME"
+echo "$EKS_CLUSTER_NAME"
+echo "$K8S_NAMESPACE"
+```
+
+## 3. ECR Checks and Image Validation
+
+```bash
+# login and repo validation
+aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" --region "$AWS_REGION" || \
+aws ecr create-repository --repository-name "$ECR_REPO_NAME" --region "$AWS_REGION"
+
+# tag and push image
+IMAGE_TAG=test-$(date +%Y%m%d%H%M%S)
+IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG"
+docker tag web-app-sprint4:local "$IMAGE_URI"
+docker push "$IMAGE_URI"
+
+# verify pushed image
+aws ecr describe-images --repository-name "$ECR_REPO_NAME" --image-ids imageTag="$IMAGE_TAG" --region "$AWS_REGION"
+```
+
+## 4. EKS Cluster and Kubernetes Checks
+
+```bash
+# kubeconfig + cluster checks
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+kubectl config current-context
+kubectl cluster-info
+kubectl get nodes -o wide
+
+# namespace and manifests
+kubectl create namespace "$K8S_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+sed "s|REPLACE_IMAGE|$IMAGE_URI|g" k8s/deployment.yaml | kubectl apply -f -
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/hpa.yaml
+
+# rollout and status
+kubectl rollout status deployment/webapp -n "$K8S_NAMESPACE" --timeout=300s
+kubectl get all -n "$K8S_NAMESPACE"
+kubectl get hpa -n "$K8S_NAMESPACE"
+kubectl get deployment webapp -n "$K8S_NAMESPACE" -o wide
+kubectl get pods -n "$K8S_NAMESPACE" -o wide
+kubectl get svc -n "$K8S_NAMESPACE" -o wide
+```
+
+## 5. Deep Kubernetes Diagnostics
+
+```bash
+# deployment and pod diagnostics
+kubectl describe deployment webapp -n "$K8S_NAMESPACE"
+kubectl get events -n "$K8S_NAMESPACE" --sort-by=.metadata.creationTimestamp
+kubectl logs -n "$K8S_NAMESPACE" deployment/webapp --tail=200
+
+# check readiness across all pods
+kubectl get pods -n "$K8S_NAMESPACE" -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,PHASE:.status.phase,NODE:.spec.nodeName
+```
+
+## 6. Terraform Validation and State Checks
+
+```bash
+cd terraform
+terraform init -reconfigure \
+  -backend-config="bucket=harish-terraform-state-bucket" \
+  -backend-config="key=terraform/terraform.tfstate" \
+  -backend-config="region=ap-south-1" \
+  -backend-config="use_lockfile=true" \
+  -backend-config="dynamodb_table=my-terraform-lock-table"
+
+terraform workspace select -or-create dev
+terraform validate
+terraform plan -out=tfplan
+terraform apply -auto-approve tfplan
+terraform output
+terraform output -json > ../ansible/terraform-outputs.json
+```
+
+## 7. Ansible Connectivity and Host Checks
+
+```bash
+# back at repo root
+./scripts/ensure_ansible.sh
+
+python3 scripts/generate_ansible_inventory.py \
+  --terraform-output ansible/terraform-outputs.json \
+  --inventory ansible/inventories/generated/hosts.ini \
+  --remote-user ubuntu
+
+ansible -i ansible/inventories/generated/hosts.ini all -m ping
+ansible-playbook -i ansible/inventories/generated/hosts.ini ansible/playbooks/configure-management.yml
+ansible-playbook -i ansible/inventories/generated/hosts.ini ansible/playbooks/validate-management.yml
+```
+
+## 8. Jenkins Trigger Checks
+
+```bash
+curl -X POST "<JENKINS_URL>/job/seed-job/build" --user "<user>:<api_token>"
+curl -X POST "<JENKINS_URL>/job/webapp-sprint4-pipeline/build" --user "<user>:<api_token>"
+```
+
+## 9. End-to-End Quick Check Block
+
+```bash
+aws sts get-caller-identity --region "$AWS_REGION"
+aws ecr describe-images --repository-name "$ECR_REPO_NAME" --region "$AWS_REGION" --max-items 5
+kubectl get nodes -o wide
+kubectl get all -n "$K8S_NAMESPACE"
+kubectl get hpa -n "$K8S_NAMESPACE"
+kubectl logs -n "$K8S_NAMESPACE" deployment/webapp --tail=100
+```
+
+## 10. Recommended Execution Order
+
+1. Terraform infra checks and apply
+2. Ansible host configuration and validation
+3. Docker build and ECR push
+4. EKS deployment and Kubernetes verification
+5. Jenkins pipeline trigger validation

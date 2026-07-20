@@ -194,7 +194,10 @@ pipeline {
           def appDir = ctx.appDir
           echo "Using app directory: ${appDir}"
           dir(appDir) {
-            docker.image(env.NODE_IMAGE).inside {
+            def containerHome = pwd()
+            def npmCacheDir = "${containerHome}/.npm-cache"
+            sh "mkdir -p '${npmCacheDir}'"
+            docker.image(env.NODE_IMAGE).inside("-e HOME=${containerHome} -e NPM_CONFIG_CACHE=${npmCacheDir}") {
               sh 'pwd && ls -la && npm ci --no-audit --no-fund'
             }
           }
@@ -211,7 +214,10 @@ pipeline {
           def appDir = ctx.appDir
           echo "Using app directory: ${appDir}"
           dir(appDir) {
-            docker.image(env.NODE_IMAGE).inside {
+            def containerHome = pwd()
+            def npmCacheDir = "${containerHome}/.npm-cache"
+            sh "mkdir -p '${npmCacheDir}'"
+            docker.image(env.NODE_IMAGE).inside("-e HOME=${containerHome} -e NPM_CONFIG_CACHE=${npmCacheDir}") {
               sh 'pwd && ls -la && npm test'
             }
           }
