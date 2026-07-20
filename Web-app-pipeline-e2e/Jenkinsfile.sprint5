@@ -460,8 +460,14 @@ pipeline {
 
   post {
     success {
-      echo "Pipeline succeeded. Image deployed: ${env.IMAGE_URI ?: 'unknown'}"
       script {
+        def deployedImage = env.IMAGE_URI?.trim()
+        if (!deployedImage) {
+          def ctx = buildPipelineContext(this)
+          applyPipelineContext(this, ctx)
+          deployedImage = ctx.imageUri
+        }
+        echo "Pipeline succeeded. Image deployed: ${deployedImage}"
         sendMonitoringNotification(this, 'success', 'Sprint pipeline deployment and monitoring checks completed successfully.')
       }
     }
